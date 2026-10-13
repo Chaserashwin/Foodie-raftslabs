@@ -1,0 +1,18 @@
+{
+  "name": "foodie-order-management",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Production-ready Food Delivery Order Management System - RaftLabs Senior Full Stack Developer Assessment",
+  "scripts": {
+    "install:all": "npm install && npm install --prefix server && npm install --prefix client",
+    "dev": "concurrently -n \"SERVER,CLIENT\" -c \"blue,green\" \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+    "build": "npm run build --prefix server && npm run build --prefix client",
+    "test": "npm run test --prefix server && npm run test --prefix client",
+    "test:server": "npm run test --prefix server",
+    "test:client": "npm run test --prefix client",
+    "lint": "npm run lint --prefix server && npm run lint --prefix client"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
