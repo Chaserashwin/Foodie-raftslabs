@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Search,
   RefreshCw,
-  FastForward,
   ShoppingBag,
   Calendar,
   MapPin,
@@ -27,10 +26,13 @@ export const OrderTrackingPage: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(!!orderId);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
-  const [isSimulating, setIsSimulating] = useState<boolean>(false);
+
+  const requestVersion = useRef(0);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
 
   const fetchOrder = async (idToFetch: string, showSpinner = true) => {
     if (!idToFetch.trim()) return;
+    const version = ++requestVersion.current;
 
     try {
       if (showSpinner) setLoading(true);
@@ -38,13 +40,20 @@ export const OrderTrackingPage: React.FC = () => {
       setError(null);
 
       const data = await api.getOrderById(idToFetch.trim());
+      if (version !== requestVersion.current) return;
       setOrder(data);
+      setRefreshError(null);
     } catch (err: any) {
-      setError(err.message || `Unable to locate order "${idToFetch}".`);
-      setOrder(null);
+      if (version !== requestVersion.current) return;
+      if (showSpinner) {
+        setError(err.message || 'Unable to locate order.');
+        setOrder(null);
+      } else setRefreshError(err.message || 'Could not refresh.');
     } finally {
-      setLoading(false);
-      setIsRefreshing(false);
+      if (version === requestVersion.current) {
+        setLoading(false);
+        setIsRefreshing(false);
+      }
     }
   };
 
@@ -54,6 +63,7 @@ export const OrderTrackingPage: React.FC = () => {
       setSearchId(orderId);
       fetchOrder(orderId, true);
     }
+    return () => { requestVersion.current++; };
   }, [orderId]);
 
   // Polling every 5 seconds if order is not yet DELIVERED
@@ -70,29 +80,16 @@ export const OrderTrackingPage: React.FC = () => {
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchId.trim()) {
-      navigate(`/track/${searchId.trim()}`);
-      fetchOrder(searchId.trim(), true);
-    }
-  };
-
-  const handleSimulateNextStep = async () => {
-    if (!order || isSimulating || order.status === 'DELIVERED') return;
-
-    try {
-      setIsSimulating(true);
-      const updated = await api.simulateProgression(order.id);
-      setOrder(updated);
-    } catch (err: any) {
-      alert(`Simulation notice: ${err.message}`);
-    } finally {
-      setIsSimulating(false);
+      navigate(`/track/${encodeURIComponent(searchId.trim())}`);
+      if (orderId === searchId.trim()) fetchOrder(searchId.trim(), true);
     }
   };
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
+      {refreshError && <p role="alert" className="text-rose-700">{refreshError} Showing last known status; retrying automatically.</p>}
       {/* Search Header */}
-      <div className="bg-white rounded-3xl border border-slate-200/80 p-6 sm:p-8 shadow-xs">
+      <div className="bg-white rounded-3xl border border-slate-200/80 p-6 sm:p-8 shadow-sm">
         <div className="max-w-xl mx-auto text-center mb-6">
           <h1 className="text-2xl sm:text-3xl font-black text-slate-900">
             Track Delivery
@@ -110,7 +107,7 @@ export const OrderTrackingPage: React.FC = () => {
               placeholder="Enter Order ID (e.g. FD-20261013-1234)"
               value={searchId}
               onChange={(e) => setSearchId(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200/80 rounded-2xl pl-11 pr-4 py-3 text-xs sm:text-sm focus:outline-hidden focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 uppercase font-mono"
+              className="w-full bg-slate-50 border border-slate-200/80 rounded-2xl pl-11 pr-4 py-3 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 uppercase font-mono"
             />
           </div>
           <button
@@ -138,7 +135,7 @@ export const OrderTrackingPage: React.FC = () => {
       {!loading && !error && order && (
         <div className="space-y-6">
           {/* Top Status Banner */}
-          <div className="bg-white rounded-3xl border border-slate-200/80 p-6 sm:p-8 shadow-xs">
+          <div className="bg-white rounded-3xl border border-slate-200/80 p-6 sm:p-8 shadow-sm">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100">
               <div>
                 <div className="flex items-center gap-2">
@@ -164,21 +161,10 @@ export const OrderTrackingPage: React.FC = () => {
                   title="Refresh order status"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-                  <span>{isRefreshing ? 'Updating...' : 'Live Polling Active'}</span>
+                  <span>{isRefreshing ? 'Updating...' : order.status === 'DELIVERED' ? 'Refresh Status' : 'Live Polling Active'}</span>
                 </button>
 
-                {/* Simulation button for demo */}
-                {order.status !== 'DELIVERED' && (
-                  <button
-                    onClick={handleSimulateNextStep}
-                    disabled={isSimulating}
-                    className="flex items-center gap-1.5 text-xs font-bold text-brand-600 hover:text-white hover:bg-brand-500 bg-brand-50 px-3 py-2 rounded-xl border border-brand-200 transition-all shadow-xs"
-                    title="Simulate the next status transition for evaluation"
-                  >
-                    <FastForward className="w-3.5 h-3.5" />
-                    <span>Advance Status</span>
-                  </button>
-                )}
+
               </div>
             </div>
 
@@ -193,9 +179,7 @@ export const OrderTrackingPage: React.FC = () => {
                   <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
                   Auto-refreshing status every 5 seconds...
                 </span>
-                <span className="text-[11px] text-amber-600 font-semibold">
-                  (Or click 'Advance Status' to simulate)
-                </span>
+
               </div>
             )}
           </div>
@@ -203,7 +187,7 @@ export const OrderTrackingPage: React.FC = () => {
           {/* Details & Items Breakdown Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Ordered Items */}
-            <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-xs">
+            <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-sm">
               <h3 className="font-black text-sm uppercase tracking-wider text-slate-900 mb-4 flex items-center gap-2">
                 <ShoppingBag className="w-4 h-4 text-brand-500" />
                 <span>Purchased Items</span>
@@ -242,7 +226,7 @@ export const OrderTrackingPage: React.FC = () => {
             </div>
 
             {/* Delivery Recipient Info */}
-            <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-xs">
+            <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-sm">
               <h3 className="font-black text-sm uppercase tracking-wider text-slate-900 mb-4 flex items-center gap-2">
                 <MapPin className="w-4 h-4 text-brand-500" />
                 <span>Delivery Recipient</span>

@@ -5,7 +5,7 @@ services:
     runtime: node
     plan: free
     rootDir: server
-    buildCommand: npm install && npm run build
+    buildCommand: npm ci && npm run build
     startCommand: npm run start
     healthCheckPath: /api/health
     envVars:
@@ -26,9 +26,8 @@ services:
   - type: web
     name: foodie-frontend-client
     runtime: static
-    plan: free
     rootDir: client
-    buildCommand: npm install && npm run build
+    buildCommand: npm ci && npm run build
     staticPublishPath: dist
     routes:
       - type: rewrite

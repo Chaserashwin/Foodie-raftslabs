@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Search, Flame, Sparkles } from 'lucide-react';
 import { MenuItem } from '../types';
 import { api } from '../services/api';
@@ -13,17 +13,21 @@ export const HomePage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const requestVersion = useRef(0);
 
   const loadMenu = async (cat: string, search: string) => {
+    const version = ++requestVersion.current;
     try {
       setLoading(true);
       setError(null);
       const data = await api.getMenu(cat, search);
+      if (version !== requestVersion.current) return;
       setItems(data);
     } catch (err: any) {
+      if (version !== requestVersion.current) return;
       setError(err.message || 'Failed to load menu items.');
     } finally {
-      setLoading(false);
+      if (version === requestVersion.current) setLoading(false);
     }
   };
 
@@ -32,13 +36,13 @@ export const HomePage: React.FC = () => {
       loadMenu(selectedCategory, searchQuery);
     }, 250);
 
-    return () => clearTimeout(handler);
+    return () => { clearTimeout(handler); requestVersion.current++; };
   }, [selectedCategory, searchQuery]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-10">
       {/* Hero Banner */}
-      <div className="relative rounded-3xl bg-linear-to-r from-slate-900 via-slate-850 to-orange-950 text-white p-8 sm:p-12 overflow-hidden shadow-2xl">
+      <div className="relative rounded-3xl bg-gradient-to-r from-slate-900 via-slate-800 to-orange-950 text-white p-8 sm:p-12 overflow-hidden shadow-2xl">
         <div className="absolute -right-20 -top-20 w-80 h-80 rounded-full bg-brand-500/15 blur-3xl pointer-events-none" />
         <div className="relative z-10 max-w-2xl space-y-4">
           <div className="inline-flex items-center gap-2 bg-orange-500/20 border border-orange-500/30 text-brand-300 text-xs font-bold px-3 py-1.5 rounded-full">
@@ -48,7 +52,7 @@ export const HomePage: React.FC = () => {
 
           <h1 className="text-3xl sm:text-5xl font-black tracking-tight leading-tight">
             Crave-Worthy Dishes, <br />
-            <span className="text-transparent bg-clip-text bg-linear-to-r from-brand-400 to-amber-300">
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-400 to-amber-300">
               Delivered Fast & Fresh.
             </span>
           </h1>
@@ -75,7 +79,7 @@ export const HomePage: React.FC = () => {
             placeholder="Search pizza, burger, sides..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-white border border-slate-200/80 rounded-2xl pl-11 pr-4 py-2.5 text-sm focus:outline-hidden focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all shadow-2xs"
+            className="w-full bg-white border border-slate-200/80 rounded-2xl pl-11 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all shadow-sm"
           />
           {searchQuery && (
             <button
@@ -135,7 +139,7 @@ export const HomePage: React.FC = () => {
                 setSearchQuery('');
                 setSelectedCategory('all');
               }}
-              className="mt-5 bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-xs"
+              className="mt-5 bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-sm"
             >
               Reset Filters
             </button>

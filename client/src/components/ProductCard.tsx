@@ -15,13 +15,13 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
 
   // Fallback placeholder image if network drops
   const displayImage = imageError
-    ? 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80'
+    ? 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="300"%3E%3Crect width="400" height="300" fill="%23f1f5f9"/%3E%3Ctext x="200" y="150" text-anchor="middle" fill="%2364748b"%3EImage unavailable%3C/text%3E%3C/svg%3E'
     : product.imageUrl;
 
   return (
-    <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs hover:shadow-xl transition-all duration-300 flex flex-col overflow-hidden group">
+    <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col overflow-hidden group">
       {/* Image Container */}
-      <div className="relative aspect-4/3 w-full overflow-hidden bg-slate-100">
+      <div className="relative aspect-[4/3] w-full overflow-hidden bg-slate-100">
         <img
           src={displayImage}
           alt={product.name}
@@ -31,7 +31,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
         />
 
         {/* Veg / Non-Veg Tag */}
-        <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-md px-2 py-1 rounded-lg border border-slate-200/60 flex items-center gap-1.5 shadow-xs">
+        <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-md px-2 py-1 rounded-lg border border-slate-200/60 flex items-center gap-1.5 shadow-sm">
           <span
             className={`w-2.5 h-2.5 rounded-full ring-2 ${
               product.isVeg
@@ -81,7 +81,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
           {quantity === 0 ? (
             <button
               onClick={() => addToCart(product)}
-              className="bg-brand-50 hover:bg-brand-500 text-brand-600 hover:text-white border border-brand-200 hover:border-brand-500 px-4 py-2 rounded-2xl text-xs font-bold flex items-center gap-1.5 transition-all duration-200 shadow-xs hover:shadow-md hover:shadow-brand-500/20 active:scale-95"
+              className="bg-brand-50 hover:bg-brand-500 text-brand-600 hover:text-white border border-brand-200 hover:border-brand-500 px-4 py-2 rounded-2xl text-xs font-bold flex items-center gap-1.5 transition-all duration-200 shadow-sm hover:shadow-md hover:shadow-brand-500/20 active:scale-95"
             >
               <Plus className="w-4 h-4" />
               ADD

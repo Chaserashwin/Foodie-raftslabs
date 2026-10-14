@@ -1,472 +1,126 @@
-# Foodie — Food Delivery & Order Management System
-**RaftLabs Senior Full Stack Developer Assessment Submission**
+# Foodie — Food Delivery Order Management
 
-[![Node.js Version](https://img.shields.io/badge/Node.js-v22+-green.svg)](https://nodejs.org)
-[![TypeScript](https://img.shields.io/badge/TypeScript-v5.7+-blue.svg)](https://www.typescriptlang.org)
-[![React](https://img.shields.io/badge/React-v18+-61dafb.svg)](https://react.dev)
-[![Vite](https://img.shields.io/badge/Vite-v6+-646cff.svg)](https://vitejs.dev)
-[![Express](https://img.shields.io/badge/Express-v4.21+-black.svg)](https://expressjs.com)
-[![MongoDB](https://img.shields.io/badge/MongoDB-Mongoose-47A248.svg)](https://www.mongodb.com)
-[![Tailwind CSS](https://img.shields.io/badge/TailwindCSS-v3.4+-38bdf8.svg)](https://tailwindcss.com)
-[![Vitest](https://img.shields.io/badge/Tests-Vitest%20%26%20RTL-yellow.svg)](https://vitest.dev)
+RaftLabs assessment implementation with an independent audit dated 14 October 2026. See [AUDIT_REPORT.md](AUDIT_REPORT.md) for evidence, defects, and verification limits. No hosted deployment has been verified.
 
----
+## Architecture
 
-## 1. Project Overview
+The root npm package runs two separate packages. `client` is a React 18 SPA using TypeScript, Vite 6, React Router 7, Tailwind CSS 3 and Lucide. React context stores the cart in localStorage. The HTTP client calls `/api` through Vite's development proxy or a configured backend URL.
 
-**Foodie** is an enterprise-grade, production-quality Food Delivery Order Management System engineered according to the **RaftLabs Senior Full Stack Developer Assessment**.
+`server` is an Express 4/TypeScript API. Routes call controllers, Zod validators, services and Mongoose 8 models. MongoDB stores menu documents and orders with item/price snapshots and status history. Tests use Vitest, Supertest, React Testing Library and jsdom; API tests use a disposable real MongoDB process through mongodb-memory-server.
 
-The application delivers a streamlined end-to-end customer journey from menu browsing, category filtering, cart management, and validated checkout to real-time order tracking and kitchen dispatch management. It includes strict server-side price validation, protected administrative order management, automatic database seeding, and extensive test coverage across backend and frontend.
+## Local setup (PowerShell, Node.js 22)
 
----
+From the repository root:
 
-## 2. Key Features
-
-### A. Gourmet Menu Catalog
-- **Diverse Categories**: Artisanal pizzas, gourmet smash burgers, crunchy sides, and crafted beverages.
-- **Rich Product Information**: Name, description, unit price (INR), high-resolution imagery, prep time, customer rating, and veg/non-veg indicator tags.
-- **Dynamic Category Filtering & Live Search**: Debounced search and instant category filtering.
-- **Robust Image Fallback**: Graceful handling of image network errors with reliable food placeholders.
-- **Loading, Empty, & Error States**: Contextual skeletons and error retry triggers.
-
-### B. Shopping Cart & Local Storage Persistence
-- **Cart Management**: Add items, adjust quantities with increment/decrement steppers, and remove items.
-- **Persistent State**: Cart automatically persists in `localStorage` across browser refreshes and tab reloads.
-- **Centralized Pricing**: Cart subtotal, fixed delivery fee (₹40), and grand total calculated centrally.
-- **Empty-Cart Safeguard**: Checkout routes and buttons gracefully redirect if the basket is empty.
-- **Slide-Over Drawer**: Responsive sliding cart overlay with backdrop blur.
-
-### C. Checkout & Strict Server Price Protection
-- **Customer Information Collected**: Full Name, Delivery Address, and Phone Number.
-- **Indian Mobile Number Validation**: Dual-layer regex (`^(?:(?:\+|00)91[\s.-]?|0)?[6-9]\d{9}$`) accepting 10-digit formats and `+91` international prefixes.
-- **Duplicate Click Prevention**: Submit buttons debounce and disable during network transmission.
-- **Trusted Server-Side Price Calculation**: **The server NEVER trusts client-submitted prices or totals.** The backend fetches items directly from the database by ID, calculates exact line item costs, applies trusted delivery fees, and saves an immutable snapshot of item names and prices into the order record.
-- **Unique Order Identifiers**: Generates both an internal MongoDB ObjectId and human-readable Order Numbers (e.g. `FD-YYYYMMDD-XXXX`).
-
-### D. Order Management, Visual Timeline & Tracking
-- **Order Status Lifecycle**:
-  1. `ORDER_RECEIVED` (Order Received)
-  2. `PREPARING` (Preparing)
-  3. `OUT_FOR_DELIVERY` (Out for Delivery)
-  4. `DELIVERED` (Delivered)
-- **Visual Order Timeline**: Interactive timeline with step icons, active pulsing states, completed checkmarks, timestamps, and status notes.
-- **Live Status Polling**: Order tracking page polls every 5 seconds until delivery completes.
-- **Simulated Progression**: One-click "Advance Status" button allows reviewers and evaluators to simulate the lifecycle in real-time.
-- **Status Transition Guard**: Prevents illegal transitions (e.g. jumping from received to delivered, or going backwards).
-
-### E. Kitchen Admin Portal
-- **Administrative Protection**: Protected endpoints require `x-admin-key` header or Bearer token.
-- **Order Management Dashboard**: Allows authorized restaurant staff to view all orders, audit timelines, and advance kitchen statuses with validated transitions.
-
----
-
-## 3. Technology Stack
-
-| Layer | Technologies |
-|---|---|
-| **Frontend** | React 18, TypeScript 5, Vite 6, Tailwind CSS 3, React Router v7, Lucide React |
-| **Backend** | Node.js (v22), Express 4, TypeScript 5, Mongoose 8, Zod 3, Helmet, CORS, Express-Rate-Limit, Morgan |
-| **Database** | MongoDB Atlas / Local MongoDB / In-memory MongoDB fallback |
-| **Testing** | Vitest, Supertest, React Testing Library, jsdom, mongodb-memory-server |
-| **Deployment** | Vercel (Client SPA), Render (Express Web Service), MongoDB Atlas |
-
----
-
-## 4. Architecture & Monorepo Structure
-
-```
-Foodie/
-├── package.json               # Root scripts orchestrating client & server
-├── render.yaml                # Render Infrastructure-as-Code Blueprint
-├── .gitignore
-├── README.md
-│
-├── server/                    # Backend API (Express + TypeScript + Mongoose)
-│   ├── package.json
-│   ├── tsconfig.json
-│   ├── vitest.config.ts
-│   ├── .env.example
-│   └── src/
-│       ├── config/
-│       │   ├── env.ts         # Environment validation and typed config
-│       │   └── db.ts          # MongoDB connection & auto-seeding logic
-│       ├── data/
-│       │   └── seedMenu.ts    # Initial gourmet menu items catalog
-│       ├── models/
-│       │   ├── menuItem.model.ts # Mongoose schema for food products
-│       │   └── order.model.ts    # Mongoose schema for orders & snapshots
-│       ├── validators/
-│       │   ├── order.validator.ts# Zod schemas for order creation & status
-│       │   └── menu.validator.ts # Zod schemas for menu query filtering
-│       ├── services/
-│       │   ├── menu.service.ts   # Menu retrieval business logic
-│       │   └── order.service.ts  # Pricing, transitions & order management
-│       ├── controllers/
-│       │   ├── health.controller.ts
-│       │   ├── menu.controller.ts
-│       │   └── order.controller.ts
-│       ├── middleware/
-│       │   ├── auth.middleware.ts        # Admin API Key verification
-│       │   └── errorHandler.middleware.ts# Centralized error handler
-│       ├── routes/
-│       │   ├── health.routes.ts
-│       │   ├── menu.routes.ts
-│       │   ├── order.routes.ts
-│       │   └── index.ts
-│       ├── tests/
-│       │   └── api.test.ts    # Vitest + Supertest integration suite (26 tests)
-│       ├── app.ts             # Express application setup (isolated for testing)
-│       └── server.ts          # Server entrypoint with port listening
-│
-└── client/                    # Frontend SPA (React + Vite + Tailwind)
-    ├── package.json
-    ├── tsconfig.json
-    ├── vite.config.ts
-    ├── vitest.config.ts
-    ├── tailwind.config.js
-    ├── vercel.json            # Vercel SPA rewrite configuration
-    ├── .env.example
-    └── src/
-        ├── types/             # Shared TypeScript models and interfaces
-        ├── utils/
-        │   ├── formatCurrency.ts # INR currency formatter
-        │   └── validators.ts     # Customer form validation rules
-        ├── services/
-        │   └── api.ts         # Centralized HTTP API client
-        ├── context/
-        │   └── CartContext.tsx# React context with localStorage persistence
-        ├── components/
-        │   ├── Navbar.tsx
-        │   ├── Footer.tsx
-        │   ├── CategoryFilter.tsx
-        │   ├── ProductCard.tsx
-        │   ├── CartDrawer.tsx
-        │   ├── OrderTimeline.tsx
-        │   ├── LoadingSpinner.tsx
-        │   └── ErrorMessage.tsx
-        ├── pages/
-        │   ├── HomePage.tsx
-        │   ├── CheckoutPage.tsx
-        │   ├── OrderConfirmationPage.tsx
-        │   ├── OrderTrackingPage.tsx
-        │   ├── AdminOrdersPage.tsx
-        │   └── NotFoundPage.tsx
-        ├── tests/
-        │   ├── setup.ts
-        │   ├── cart.test.tsx      # Cart Hook & calculation tests
-        │   └── components.test.tsx# React Testing Library component tests
-        ├── App.tsx
-        └── main.tsx
+```powershell
+npm ci
+npm ci --prefix server
+npm ci --prefix client
+Copy-Item server/.env.example server/.env
+Copy-Item client/.env.example client/.env
 ```
 
----
+Edit `server/.env` to point at your running local MongoDB or a dedicated Atlas development database. Generate a unique admin key locally and put it in the ignored environment file; do not commit or share it. This command writes the key to the ignored file without printing it:
 
-## 5. Local Prerequisites & Installation
-
-### Prerequisites
-- **Node.js**: v18 or higher (v22 recommended)
-- **npm**: v9 or higher
-
-### Installation
-
-Clone the repository and install dependencies:
-
-```bash
-# In the root repository directory
-npm run install:all
-```
-
-Or install individual workspaces:
-
-```bash
-cd server && npm install
-cd ../client && npm install
-```
-
----
-
-## 6. Environment Variables Reference
-
-### Backend (`server/.env`)
-
-Create `server/.env` with:
-
-```env
-PORT=5000
-NODE_ENV=development
-MONGODB_URI=mongodb://127.0.0.1:27017/foodie
-CORS_ORIGIN=*
-ADMIN_API_KEY=raftlabs-admin-secret-key-2026
-DELIVERY_FEE=40
-```
-
-> **Note**: If a local MongoDB instance is not active, the backend automatically boots an embedded in-memory database fallback so local development and API tests work without requiring manual database installations.
-
-### Frontend (`client/.env`)
-
-Create `client/.env` with:
-
-```env
-VITE_API_URL=/api
-```
-
-*(During local development, Vite proxies `/api` requests to `http://localhost:5000`).*
-
----
-
-## 7. Development, Test & Build Commands
-
-### Running Locally
-
-To run both backend and frontend concurrently from the root directory:
-
-```bash
+```powershell
+node -e 'const fs=require("node:fs"),crypto=require("node:crypto"); fs.appendFileSync("server/.env", "\nADMIN_API_KEY="+crypto.randomBytes(32).toString("hex")+"\n")'
 npm run dev
 ```
 
-- Frontend: [http://localhost:5173](http://localhost:5173)
-- Backend API: [http://localhost:5000](http://localhost:5000)
-- Health Check: [http://localhost:5000/api/health](http://localhost:5000/api/health)
+The client runs at http://localhost:5173, the backend at http://localhost:5000 and readiness at http://localhost:5000/api/health. Visit `/admin` and enter the key you configured to update statuses. Keys are held only in React memory and must be entered again on refresh.
 
-### Running Tests
+For a disposable local demo without MongoDB, explicitly set `USE_MEMORY_DB=true` in `server/.env`. This permits a temporary database only when the configured URI cannot connect in development. Dependencies must include devDependencies and the MongoDB binary must be available/downloadable. Orders in this temporary database do not survive backend restart. Use persistent MongoDB for real persistence or submission.
 
-Execute the full automated test suite:
+## Environment reference
 
-```bash
-# Run both test suites
+| Variable | Default / requirement |
+|---|---|
+| `NODE_ENV` | `development`; must be development, test, or production |
+| `PORT` | 5000; integer 1–65535 |
+| `MONGODB_URI` | local MongoDB in development; explicitly required in production |
+| `CORS_ORIGIN` | `http://localhost:5173`; exact HTTP(S) origin or comma-separated origins; explicit non-wildcard value required in production |
+| `ADMIN_API_KEY` | unique key of at least 16 characters; required in production; if omitted in development a random inaccessible key is generated for that process |
+| `DELIVERY_FEE` | 40 INR; finite nonnegative number |
+| `USE_MEMORY_DB` | `false`; forbidden in production |
+| `VITE_API_URL` | client-only, `/api` locally; deployed backend URL ending in `/api` for hosted frontend |
+
+All `VITE_` values are public build-time configuration. Never put the admin key or MongoDB credentials in frontend variables. The UI fetches `/api/config` for the delivery fee; menu/cart values are estimates and saved orders always use trusted database prices.
+
+## Checks and production commands
+
+```powershell
 npm test
-
-# Run backend tests only (26 tests)
-npm run test:server
-
-# Run frontend tests only (12 tests)
-npm run test:client
-```
-
-### Type Checking & Linting
-
-```bash
 npm run lint
-```
-
-### Production Build
-
-```bash
 npm run build
+npm run start --prefix server
+npm run preview --prefix client
 ```
 
----
+`lint` runs TypeScript checks in each package. There is no ESLint configuration. API tests force `NODE_ENV=test` and use an isolated database; they fail instead of falling back to a configured external database. The first test run can download a MongoDB executable. Do not use `NODE_ENV=test` as a deployment configuration.
 
-## 8. REST API Documentation
+The production API starts from `server/dist/server.js` after building. Production requires persistent MongoDB and explicit origins/admin key. The backend serves API endpoints only; host the client assets separately. `vite preview` is for local build verification.
 
-### 1. Health Check
-- **Endpoint**: `GET /api/health`
-- **Response**:
+## API
+
+Responses use `{ success, data }` on successful data requests and `{ success: false, error, details? }` on errors. Readiness has its own status/database fields.
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| GET | `/api/health` | 200 if connected; 503 if database disconnected |
+| GET | `/api/config` | Public delivery fee only |
+| GET | `/api/menu?category=pizzas&search=Pizza` | Available menu, optional category and literal search (max 120 chars) |
+| GET | `/api/menu/:id` | Individual menu item |
+| POST | `/api/orders` | Validate customer/products/quantities and save order |
+| GET | `/api/orders/:id` | Retrieve by MongoDB ID or order number |
+| GET | `/api/orders?limit=50&skip=0` | Admin list; limit 1–100 and nonnegative skip |
+| PATCH | `/api/orders/:id/status` | Admin status update |
+| POST | `/api/orders/:id/simulate` | Admin-only advancement to the next stage |
+
+Admin routes require `x-admin-key` or `Authorization: Bearer <your key>`. Customer tracking does not expose a status-changing button.
+
+Order request:
+
 ```json
 {
-  "success": true,
-  "status": "UP",
-  "timestamp": "2026-10-13T18:00:00.000Z",
-  "uptime": 12.4,
-  "database": {
-    "status": "connected",
-    "readyState": 1
-  }
+  "customer": {"name": "Demo Customer", "phone": "9876543210", "address": "42 Demo Street"},
+  "items": [{"productId": "<actual menu item id>", "quantity": 2}]
 }
 ```
 
-### 2. Get Menu Catalog
-- **Endpoint**: `GET /api/menu`
-- **Query Parameters**:
-  - `category` *(optional)*: `pizzas` | `burgers` | `sides` | `beverages`
-  - `search` *(optional)*: string
-- **Response**:
-```json
-{
-  "success": true,
-  "count": 16,
-  "data": [
-    {
-      "id": "670bf3c5...",
-      "name": "Margherita Fresca Pizza",
-      "description": "Classic artisanal sourdough base topped with San Marzano tomato sauce...",
-      "price": 349,
-      "category": "pizzas",
-      "imageUrl": "https://images.unsplash.com/photo-1604382354936-07c5d9983bd3...",
-      "isAvailable": true,
-      "rating": 4.8,
-      "prepTime": "20-25 min",
-      "isVeg": true
-    }
-  ]
-}
+Name is 2–100 characters, address 5–300 characters, and phone must match the Indian mobile format (10 digits starting 6–9, optionally prefixed by +91, 0091 or 0). Quantities are integers 1–50. Orders accept at most 100 distinct product lines. Duplicate product lines are rejected; unknown client price/total fields are discarded.
+
+Send a unique `Idempotency-Key` header (16–100 alphanumeric/hyphen characters) when creating orders. Retrying the same validated payload/key returns the original order; changed payload reuse returns 409. Concurrent retries are protected by a unique index. The checkout reuses its key when retrying within the mounted page, and disables duplicate clicks while submitting. The key is optional for non-UI API callers. Browser refresh/new tabs are separate attempts.
+
+Status request: `{"status":"PREPARING","note":"Kitchen started preparation"}`. The lifecycle is `ORDER_RECEIVED → PREPARING → OUT_FOR_DELIVERY → DELIVERED`. Repeating the current status returns the current order; skipped/backward transitions return 400. Concurrent writes cannot append duplicate timeline entries.
+
+There are no product write/delete or order delete endpoints. Menu data is seeded only into an empty collection; existing data and orders are not deleted or reset. General seed changes do not migrate an existing database. Startup narrowly repairs only the two exact legacy image URLs identified by the audit; custom images are preserved.
+
+## Deployment and submission
+
+No deployment was performed during the audit. After authorization and access to the hosting/database accounts:
+
+1. Create a dedicated persistent MongoDB database/user. Allow only the necessary hosting egress addresses where practical; keep the URI private.
+2. Deploy the backend to Render with root directory `server`, build `npm ci && npm run build`, start `npm run start`, health check `/api/health`. Set `NODE_ENV=production`, `MONGODB_URI`, a unique `ADMIN_API_KEY`, exact frontend `CORS_ORIGIN`, and `DELIVERY_FEE=40`; keep `USE_MEMORY_DB=false`. The blueprint provides the backend and an optional Render static frontend.
+3. Deploy the frontend to Vercel with root `client`, build `npm run build`, output `dist`, and `VITE_API_URL=<actual backend HTTPS URL>/api`. Set this before building and redeploy if it changes. Alternatively use the blueprint's Render static frontend with the same public API variable.
+4. Set backend CORS to the actual frontend origin, including only deliberately approved preview origins. Confirm the API works from that browser origin. Vercel SPA deep-link rewrites are in `client/vercel.json`; Render static rewrites are in `render.yaml`.
+5. Verify the actual health/menu URLs and complete the browser journey at desktop and mobile widths. Refresh the cart, confirmation, and tracking pages. Restart the deployed backend and verify orders remain.
+6. Submit only verified live URLs, the repository and requested walkthrough. Demonstrate invalid checkout, valid checkout, server prices, admin authorization, all statuses, and actual test/build results. Disclose AI assistance and the remaining limits in the audit report accurately.
+
+Configuration references: [Render blueprint specification](https://render.com/docs/blueprint-spec) and [Vite on Vercel](https://vercel.com/docs/frameworks/frontend/vite).
+
+## Known limits
+
+AI assistance: the initial implementation was completed with Antigravity. Codex then reviewed the repository, fixed confirmed issues, added regression tests and ran the automated suites, builds and isolated live HTTP/persistence checks documented in the audit report. Browser visual/mobile QA and hosted deployment were not verified. The submitter should review the implementation and explain these limits in the walkthrough.
+
+The app is an assessment demo, with a shared admin key and public order lookup by identifier rather than customer accounts. Treat an order link as a private capability. Existing short legacy order numbers remain more guessable than newly generated 96-bit random suffixes. Catalog/fee changes during an already open cart can change server totals. Production MongoDB/hosting credentials and a live deployment were not verified. Browser visual/mobile QA remains outstanding; see the audit report. Remove any old admin credential retained in browser storage from earlier versions and rotate any previously used published default key.
+
+For repeatable local HTTP smoke checks against a disposable server with synthetic orders:
+
+```powershell
+$env:AUDIT_ADMIN_KEY = '<key configured on your disposable local server>'
+node scripts/audit-smoke.mjs
+Remove-Item Env:AUDIT_ADMIN_KEY
+node scripts/audit-persistence.cjs
 ```
 
-### 3. Create Order
-- **Endpoint**: `POST /api/orders`
-- **Request Body**:
-```json
-{
-  "customer": {
-    "name": "Aarav Sharma",
-    "phone": "9876543210",
-    "address": "402 Palm Grove Apartments, Indiranagar, Bengaluru"
-  },
-  "items": [
-    { "productId": "670bf3c50000000000000001", "quantity": 2 },
-    { "productId": "670bf3c50000000000000005", "quantity": 1 }
-  ]
-}
-```
-- **Response (201 Created)**:
-```json
-{
-  "success": true,
-  "message": "Order placed successfully",
-  "data": {
-    "id": "670bf4e2...",
-    "orderNumber": "FD-20261013-4821",
-    "customer": {
-      "name": "Aarav Sharma",
-      "phone": "9876543210",
-      "address": "402 Palm Grove Apartments, Indiranagar, Bengaluru"
-    },
-    "items": [
-      {
-        "productId": "670bf3c50000000000000001",
-        "name": "Margherita Fresca Pizza",
-        "price": 349,
-        "quantity": 2,
-        "subtotal": 698
-      }
-    ],
-    "subtotal": 997,
-    "deliveryFee": 40,
-    "total": 1037,
-    "status": "ORDER_RECEIVED",
-    "timeline": [
-      {
-        "status": "ORDER_RECEIVED",
-        "timestamp": "2026-10-13T18:05:00.000Z",
-        "note": "Order successfully placed and verified"
-      }
-    ]
-  }
-}
-```
-
-### 4. Retrieve Order
-- **Endpoint**: `GET /api/orders/:id`
-- Accepts either MongoDB `_id` or human-friendly `orderNumber` (e.g. `FD-20261013-4821`).
-
-### 5. Advance Order Status (Simulation)
-- **Endpoint**: `POST /api/orders/:id/simulate`
-- Advances order to next valid stage (`ORDER_RECEIVED` → `PREPARING` → `OUT_FOR_DELIVERY` → `DELIVERED`).
-
-### 6. Kitchen Admin: List All Orders (Protected)
-- **Endpoint**: `GET /api/orders?limit=50&skip=0`
-- **Headers**: `x-admin-key: raftlabs-admin-secret-key-2026`
-
-### 7. Kitchen Admin: Update Status (Protected)
-- **Endpoint**: `PATCH /api/orders/:id/status`
-- **Headers**: `x-admin-key: raftlabs-admin-secret-key-2026`
-- **Request Body**:
-```json
-{
-  "status": "PREPARING",
-  "note": "Kitchen started wood-fire baking"
-}
-```
-
----
-
-## 9. Deployment Guide
-
-### A. Frontend on Vercel
-1. Link your GitHub repository in the [Vercel Dashboard](https://vercel.com).
-2. Set **Root Directory**: `client`.
-3. Set **Build Command**: `npm run build`.
-4. Set **Output Directory**: `dist`.
-5. Set Environment Variable:
-   - `VITE_API_URL`: Your deployed backend URL (e.g., `https://foodie-backend-api.onrender.com/api`).
-6. Deploy. `client/vercel.json` ensures client-side routing works smoothly.
-
-### B. Backend on Render
-1. Create a **New Web Service** from GitHub repo on [Render](https://render.com).
-2. Root Directory: `server`.
-3. Build Command: `npm install && npm run build`.
-4. Start Command: `npm run start`.
-5. Set Environment Variables:
-   - `NODE_ENV`: `production`
-   - `PORT`: `10000`
-   - `MONGODB_URI`: Your MongoDB Atlas connection string.
-   - `CORS_ORIGIN`: Your deployed Vercel frontend URL.
-   - `ADMIN_API_KEY`: A secure random secret key.
-   - `DELIVERY_FEE`: `40`
-6. Render Health Check Path: `/api/health`.
-
-### C. MongoDB Atlas Database
-1. Create a free M0 cluster on [MongoDB Atlas](https://www.mongodb.com/cloud/atlas).
-2. Create a database user with read/write permissions.
-3. Allow network access from Render IP addresses (`0.0.0.0/0`).
-4. Copy connection URI into Render's `MONGODB_URI` environment variable.
-
----
-
-## 10. Security & Architectural Decisions
-
-1. **Server-Side Price Authority**: The client never transmits prices or totals. All calculations are performed on the server based on database records.
-2. **Immutable Item Snapshots**: If product prices change later in the catalog, historical orders remain unaffected because unit prices and product names are captured at order placement time.
-3. **Protected Admin Routes**: Operations modifying order status or listing sensitive customer histories require admin authentication via `x-admin-key`.
-4. **Input Sanitization & Schema Validation**: Strict runtime Zod schema parsing across query params, request bodies, and database inputs.
-5. **Rate Limiting & Helmet Headers**: Standard HTTP security headers and rate limits applied to mitigate abuse.
-6. **Isolated Test Strategy**: API tests use an in-memory database with isolated seed data, ensuring zero side-effects on production or local databases.
-
----
-
-## 11. 12–15 Minute Loom Walkthrough Script
-
-Use this structured outline during the evaluation walkthrough:
-
-- **00:00 – 02:00: Introduction & Architectural Overview**
-  - High-level architecture: Monorepo layout (`server`, `client`), modular boundaries (controllers, services, validators, models).
-  - Technology stack choices: React + Vite + TypeScript, Express + Mongoose + Zod, Tailwind CSS, Vitest.
-- **02:00 – 04:30: Live Customer Journey (Menu & Cart)**
-  - Browse menu items across Pizzas, Burgers, Sides, Beverages.
-  - Test real-time search and category filtering.
-  - Add items to the cart, show quantity updates, item removal, and localStorage persistence on page reload.
-  - Review centralized pricing: line item subtotal, delivery fee, and grand total.
-- **04:30 – 07:30: Checkout & Server-Side Security Verification**
-  - Demonstrate field-level validation (empty inputs, invalid phone format).
-  - Enter valid Indian phone number and delivery address.
-  - Highlight price security: show network payload containing only product IDs and quantities, with server computing and validating total prices.
-  - Place order and show duplicate-click prevention.
-- **07:30 – 10:00: Order Confirmation & Live Tracking**
-  - Review order confirmation page with generated Order ID (e.g. `FD-YYYYMMDD-XXXX`) and item snapshot.
-  - Navigate to `/track/:orderId`.
-  - Explain visual tracking timeline and 5-second polling mechanism.
-  - Use the "Advance Status" button to simulate kitchen progression (`ORDER_RECEIVED` → `PREPARING` → `OUT_FOR_DELIVERY` → `DELIVERED`).
-  - Demonstrate transition validation guard (preventing illegal jumps or backward status changes).
-- **10:00 – 12:00: Kitchen Admin Portal & Authorization**
-  - Access `/admin` route.
-  - Demonstrate 401 Unauthorized protection when unauthorized.
-  - Authenticate using admin API key.
-  - View full orders dashboard, audit timestamps, and manage statuses.
-- **12:00 – 14:00: Test Suite & Code Quality Inspection**
-  - Run `npm test` demonstrating all 26 backend tests and 12 frontend tests passing cleanly.
-  - Review code structure: separation of `app.ts` and `server.ts`, database auto-seeding, and error handler middleware.
-- **14:00 – 15:00: Wrap-Up & Deployment Readiness**
-  - Review Render blueprint (`render.yaml`) and Vercel configuration (`vercel.json`).
-  - Closing remarks.
-
----
-
-## 12. AI-Assisted Development Disclosure
-
-In accordance with Section 6 of the assessment guidelines:
-- **Assisted Tasks**: Initial monorepo directory scaffolding, boilerplate test writing with Supertest/React Testing Library, and curated mock menu photography data.
-- **Human Verification & Validation**:
-  - Every external package API was verified against installed versions.
-  - Business logic, pricing math, regex phone validators, and status transition machines were tested with integration tests.
-  - TypeScript types were verified with zero `any` shortcuts in application business logic.
-  - All test suites (38 total tests) and production builds (`tsc`, `vite build`) were executed and verified locally.
+The smoke script requires backend port 5000 and Vite port 5173 by default (`AUDIT_API_URL` can override the API URL). It creates synthetic test orders. The persistence script starts a disposable MongoDB and compiled production server on port 5011, checks restart/readiness, and stops both; its temporary database files are ignored under `.audit-runtime`.

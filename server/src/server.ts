@@ -1,6 +1,6 @@
 import { app } from './app.js';
 import { env } from './config/env.js';
-import { connectDatabase } from './config/db.js';
+import { connectDatabase, disconnectDatabase } from './config/db.js';
 
 async function startServer(): Promise<void> {
   try {
@@ -13,7 +13,8 @@ async function startServer(): Promise<void> {
 
     const shutdown = async (signal: string) => {
       console.log(`Received ${signal}. Shutting down gracefully...`);
-      server.close(() => {
+      server.close(async () => {
+        await disconnectDatabase();
         console.log('HTTP server closed.');
         process.exit(0);
       });
@@ -21,8 +22,8 @@ async function startServer(): Promise<void> {
 
     process.on('SIGTERM', () => shutdown('SIGTERM'));
     process.on('SIGINT', () => shutdown('SIGINT'));
-  } catch (error) {
-    console.error('Failed to start Foodie server:', error);
+  } catch {
+    console.error('Failed to start Foodie server');
     process.exit(1);
   }
 }

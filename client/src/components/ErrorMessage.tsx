@@ -23,7 +23,7 @@ export const ErrorMessage: React.FC<ErrorMessageProps> = ({
       {onRetry && (
         <button
           onClick={onRetry}
-          className="mt-4 inline-flex items-center gap-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-xs"
+          className="mt-4 inline-flex items-center gap-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-sm"
         >
           <RefreshCw className="w-3.5 h-3.5" />
           <span>Try Again</span>

@@ -32,6 +32,8 @@ export interface IStatusTimeline {
 export interface IOrder extends Document {
   _id: mongoose.Types.ObjectId;
   orderNumber: string;
+  idempotencyKey?: string;
+  requestHash?: string;
   customer: ICustomer;
   items: IOrderItem[];
   subtotal: number;
@@ -118,6 +120,8 @@ const StatusTimelineSchema = new Schema<IStatusTimeline>(
 
 const OrderSchema = new Schema<IOrder>(
   {
+    idempotencyKey: { type: String, unique: true, sparse: true },
+    requestHash: { type: String },
     orderNumber: {
       type: String,
       required: true,
@@ -170,6 +174,8 @@ const OrderSchema = new Schema<IOrder>(
       transform: (_doc, ret: Record<string, any>) => {
         ret.id = ret._id.toString();
         delete ret.__v;
+        delete ret.idempotencyKey;
+        delete ret.requestHash;
         return ret;
       },
     },

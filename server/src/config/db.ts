@@ -1,9 +1,26 @@
 import mongoose from 'mongoose';
 import { env } from './env.js';
 import { MenuItem } from '../models/menuItem.model.js';
-import { SEED_MENU_ITEMS } from '../data/seedMenu.js';
+import { Order } from '../models/order.model.js';
+import { SEED_MENU_ITEMS, LEGACY_IMAGE_REPLACEMENTS } from '../data/seedMenu.js';
 
 let mongodInstance: any = null;
+
+async function configureMongoMemoryBinary(): Promise<void> {
+  const path = await import('path');
+  const fs = await import('fs');
+
+  const possibleDirs = [
+    path.resolve(process.cwd(), 'server/node_modules/.cache/mongodb-memory-server'),
+    path.resolve(process.cwd(), 'node_modules/.cache/mongodb-memory-server'),
+  ];
+  for (const dir of possibleDirs) {
+    if (fs.existsSync(dir)) {
+      process.env.MONGOMS_DOWNLOAD_DIR = dir;
+      break;
+    }
+  }
+}
 
 export async function connectDatabase(): Promise<void> {
   if (mongoose.connection.readyState === 1) {
@@ -13,30 +30,20 @@ export async function connectDatabase(): Promise<void> {
   // If in test environment, use MongoMemoryServer for full isolation
   if (env.NODE_ENV === 'test') {
     try {
-      const path = await import('path');
-      const fs = await import('fs');
-
-      // Set download directory to where the binary was cached
-      const possibleDirs = [
-        path.resolve(process.cwd(), 'server/node_modules/.cache/mongodb-memory-server'),
-        path.resolve(process.cwd(), 'node_modules/.cache/mongodb-memory-server'),
-      ];
-      for (const dir of possibleDirs) {
-        if (fs.existsSync(dir)) {
-          process.env.MONGOMS_DOWNLOAD_DIR = dir;
-          break;
-        }
-      }
-
+      await configureMongoMemoryBinary();
       const { MongoMemoryServer } = await import('mongodb-memory-server');
-      mongodInstance = await MongoMemoryServer.create();
+      mongodInstance = await MongoMemoryServer.create({
+        instance: {
+          launchTimeout: 60000,
+        },
+      });
       const uri = mongodInstance.getUri();
       await mongoose.connect(uri);
       console.log('Connected to isolated in-memory test database');
       await seedDatabaseIfEmpty();
       return;
-    } catch (err) {
-      console.error('Failed to start in-memory test database, attempting direct URI:', err);
+    } catch {
+      throw new Error('Failed to start isolated test database; external database fallback is forbidden');
     }
   }
 
@@ -44,31 +51,37 @@ export async function connectDatabase(): Promise<void> {
   try {
     mongoose.set('strictQuery', false);
     await mongoose.connect(env.MONGODB_URI, {
-      serverSelectionTimeoutMS: 4000,
+      serverSelectionTimeoutMS: 2000,
     });
-    console.log(`Connected to MongoDB at ${env.MONGODB_URI}`);
-    await seedDatabaseIfEmpty();
-  } catch (err: any) {
-    console.warn(`Could not connect to external MongoDB: ${err.message}`);
+    console.log('Connected to MongoDB');
+  } catch {
+    console.warn('Could not connect to configured MongoDB');
 
-    // If local development and no MongoDB server is running, spin up an in-memory Mongo server so local dev never breaks
-    if (env.NODE_ENV === 'development') {
+    // If local development and no MongoDB server is running, spin up embedded Mongo server so local dev never breaks
+    if (env.NODE_ENV === 'development' && env.USE_MEMORY_DB === 'true') {
       try {
         console.log('Spinning up embedded MongoDB instance for seamless local development...');
+        await configureMongoMemoryBinary();
         const { MongoMemoryServer } = await import('mongodb-memory-server');
-        mongodInstance = await MongoMemoryServer.create();
+        mongodInstance = await MongoMemoryServer.create({
+          instance: {
+            launchTimeout: 60000,
+          },
+        });
         const fallbackUri = mongodInstance.getUri();
         await mongoose.connect(fallbackUri);
-        console.log('Connected to embedded local development database');
+        console.warn('Using temporary development database; orders are lost on restart');
         await seedDatabaseIfEmpty();
         return;
-      } catch (fallbackErr) {
-        console.error('Failed to start embedded database fallback:', fallbackErr);
+      } catch {
+        console.error('Failed to start embedded database fallback');
       }
     }
 
-    throw err;
+    throw new Error('Database initialization failed');
   }
+  // A seed/index failure must fail startup, never switch a connected database.
+  await seedDatabaseIfEmpty();
 }
 
 export async function disconnectDatabase(): Promise<void> {
@@ -89,7 +102,12 @@ export async function seedDatabaseIfEmpty(): Promise<void> {
       await MenuItem.insertMany(SEED_MENU_ITEMS);
       console.log(`Successfully seeded ${SEED_MENU_ITEMS.length} menu items.`);
     }
-  } catch (err) {
-    console.error('Error during menu seeding:', err);
+    // Ensure unique order/idempotency indexes exist before accepting requests.
+    await Order.init();
+    for (const [oldUrl, imageUrl] of LEGACY_IMAGE_REPLACEMENTS) {
+      await MenuItem.updateMany({ imageUrl: oldUrl }, { $set: { imageUrl } });
+    }
+  } catch {
+    throw new Error('Menu seed failed');
   }
 }

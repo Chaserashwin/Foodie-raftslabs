@@ -10,6 +10,12 @@ export interface SeedMenuItem {
   isVeg: boolean;
 }
 
+// Narrow repair for the two previously seeded image URLs that return HTTP 404.
+export const LEGACY_IMAGE_REPLACEMENTS = [
+  ['https://images.unsplash.com/photo-1576107232684-1279f3908594?auto=format&fit=crop&w=800&q=80', 'https://images.unsplash.com/photo-1573080496219-bb080dd4f877?auto=format&fit=crop&w=800&q=80'],
+  ['https://images.unsplash.com/photo-1639024471287-035186f55b1c?auto=format&fit=crop&w=800&q=80', 'https://images.unsplash.com/photo-1639024471283-03518883512d?auto=format&fit=crop&w=800&q=80'],
+] as const;
+
 export const SEED_MENU_ITEMS: SeedMenuItem[] = [
   // PIZZAS
   {
@@ -109,7 +115,7 @@ export const SEED_MENU_ITEMS: SeedMenuItem[] = [
     description: 'Crispy twice-cooked skin-on Idaho potatoes tossed in white truffle oil, grated aged parmesan, and freshly chopped chives.',
     price: 189,
     category: 'sides',
-    imageUrl: 'https://images.unsplash.com/photo-1576107232684-1279f3908594?auto=format&fit=crop&w=800&q=80',
+    imageUrl: 'https://images.unsplash.com/photo-1573080496219-bb080dd4f877?auto=format&fit=crop&w=800&q=80',
     isAvailable: true,
     rating: 4.8,
     prepTime: '10-15 min',
@@ -142,7 +148,7 @@ export const SEED_MENU_ITEMS: SeedMenuItem[] = [
     description: 'Sweet Spanish yellow onions sliced thick, beer-battered to crunchy perfection, dusted with smoked paprika.',
     price: 169,
     category: 'sides',
-    imageUrl: 'https://images.unsplash.com/photo-1639024471287-035186f55b1c?auto=format&fit=crop&w=800&q=80',
+    imageUrl: 'https://images.unsplash.com/photo-1639024471283-03518883512d?auto=format&fit=crop&w=800&q=80',
     isAvailable: true,
     rating: 4.5,
     prepTime: '10-14 min',

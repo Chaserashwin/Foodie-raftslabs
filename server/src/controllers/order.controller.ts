@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { z } from 'zod';
 import { OrderService } from '../services/order.service.js';
 import {
   createOrderSchema,
@@ -9,7 +10,9 @@ export class OrderController {
   public static async createOrder(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const validatedData = createOrderSchema.parse(req.body);
-      const order = await OrderService.createOrder(validatedData);
+      const keyHeader = req.get('Idempotency-Key');
+      const key = keyHeader === undefined ? undefined : z.string().min(16).max(100).regex(/^[a-zA-Z0-9-]+$/).parse(keyHeader);
+      const order = await OrderService.createOrder(validatedData, key);
 
       res.status(201).json({
         success: true,
@@ -37,8 +40,10 @@ export class OrderController {
 
   public static async getAllOrders(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const limit = parseInt((req.query.limit as string) || '50', 10);
-      const skip = parseInt((req.query.skip as string) || '0', 10);
+      const { limit, skip } = z.object({
+        limit: z.coerce.number().int().min(1).max(100).default(50),
+        skip: z.coerce.number().int().min(0).max(100000).default(0),
+      }).parse(req.query);
 
       const result = await OrderService.getAllOrders(limit, skip);
 

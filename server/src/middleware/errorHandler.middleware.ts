@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
 import mongoose from 'mongoose';
-import { env } from '../config/env.js';
 
 export class AppError extends Error {
   public statusCode: number;
@@ -22,6 +21,10 @@ export function errorHandler(
   res: Response,
   _next: NextFunction
 ): void {
+  if (err.type === 'entity.parse.failed' || err.type === 'entity.too.large') {
+    res.status(err.type === 'entity.too.large' ? 413 : 400).json({ success: false, error: err.type === 'entity.too.large' ? 'Request body too large' : 'Malformed JSON body' });
+    return;
+  }
   // 1. Zod Validation Errors
   if (err instanceof ZodError) {
     const formattedErrors = err.errors.map((e) => ({
@@ -72,16 +75,12 @@ export function errorHandler(
   }
 
   // 5. Unhandled / Server Errors
-  console.error('Unhandled Server Error:', err);
+  console.error('Unhandled server error');
 
-  const responseMessage =
-    env.NODE_ENV === 'production'
-      ? 'An unexpected internal server error occurred.'
-      : err.message || 'Internal Server Error';
+  const responseMessage = 'An unexpected internal server error occurred.';
 
   res.status(500).json({
     success: false,
     error: responseMessage,
-    ...(env.NODE_ENV !== 'production' && { stack: err.stack }),
   });
 }

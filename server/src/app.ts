@@ -21,8 +21,8 @@ app.use(
   cors({
     origin: allowedOrigins,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-key'],
-    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-key', 'Idempotency-Key'],
+    credentials: false,
   })
 );
 
@@ -38,12 +38,20 @@ if (env.NODE_ENV !== 'test') {
       error: 'Too many requests from this IP, please try again after 15 minutes',
     },
   });
-  app.use('/api', limiter);
+  const readLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, max: 1000,
+    standardHeaders: true, legacyHeaders: false,
+    message: { success: false, error: 'Too many reads; please try again later' },
+  });
+  app.use('/api', (req, res, next) => {
+    if (req.path === '/health') return next();
+    return req.method === 'GET' ? readLimiter(req, res, next) : limiter(req, res, next);
+  });
 }
 
 // Request logging (cleaner, omit tokens/secrets)
 if (env.NODE_ENV !== 'test') {
-  app.use(morgan(':method :url :status :res[content-length] - :response-time ms'));
+  app.use(morgan(':method :status :res[content-length] - :response-time ms'));
 }
 
 // Body parsing with size limit
@@ -51,6 +59,7 @@ app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 // Mount API routes
+app.get('/api/config', (_req, res) => res.json({ success: true, data: { deliveryFee: env.DELIVERY_FEE } }));
 app.use('/api', apiRoutes);
 
 // Catch-all for unmatched routes

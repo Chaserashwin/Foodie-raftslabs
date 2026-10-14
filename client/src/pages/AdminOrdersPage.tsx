@@ -21,9 +21,7 @@ const STATUS_OPTIONS: { value: OrderStatus; label: string }[] = [
 ];
 
 export const AdminOrdersPage: React.FC = () => {
-  const [adminKey, setAdminKey] = useState<string>(() => {
-    return localStorage.getItem('foodie_admin_key') || 'raftlabs-admin-secret-key-2026';
-  });
+  const [adminKey, setAdminKey] = useState<string>('');
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [inputKey, setInputKey] = useState<string>(adminKey);
   const [orders, setOrders] = useState<Order[]>([]);
@@ -38,7 +36,7 @@ export const AdminOrdersPage: React.FC = () => {
       const res = await api.getAllOrders(key);
       setOrders(res.orders);
       setIsAuthenticated(true);
-      localStorage.setItem('foodie_admin_key', key);
+
     } catch (err: any) {
       setError(err.message || 'Unauthorized access. Please provide valid Admin API Key.');
       setIsAuthenticated(false);
@@ -74,7 +72,7 @@ export const AdminOrdersPage: React.FC = () => {
   if (!isAuthenticated && !loading) {
     return (
       <div className="max-w-md mx-auto px-4 py-16">
-        <div className="bg-white rounded-3xl border border-slate-200/80 p-8 shadow-xs text-center">
+        <div className="bg-white rounded-3xl border border-slate-200/80 p-8 shadow-sm text-center">
           <div className="w-14 h-14 rounded-2xl bg-slate-900 text-white flex items-center justify-center mx-auto mb-4">
             <ShieldCheck className="w-8 h-8 text-brand-400" />
           </div>
@@ -97,20 +95,18 @@ export const AdminOrdersPage: React.FC = () => {
                 placeholder="Enter Admin API Key"
                 value={inputKey}
                 onChange={(e) => setInputKey(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-11 pr-4 py-3 text-xs font-mono focus:outline-hidden focus:ring-2 focus:ring-brand-500"
+                className="w-full bg-slate-50 border border-slate-200 rounded-2xl pl-11 pr-4 py-3 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
             </div>
             <button
               type="submit"
-              className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs py-3 px-4 rounded-xl transition-all shadow-xs"
+              className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs py-3 px-4 rounded-xl transition-all shadow-sm"
             >
               Authenticate Portal
             </button>
           </form>
 
-          <p className="text-[11px] text-slate-600 mt-4">
-            Default evaluation key: <code className="bg-slate-100 px-1 py-0.5 rounded font-mono">raftlabs-admin-secret-key-2026</code>
-          </p>
+
         </div>
       </div>
     );
@@ -135,7 +131,7 @@ export const AdminOrdersPage: React.FC = () => {
           <button
             onClick={() => fetchOrders(adminKey)}
             disabled={loading}
-            className="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs px-4 py-2.5 rounded-xl border border-slate-200 shadow-2xs transition-all"
+            className="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs px-4 py-2.5 rounded-xl border border-slate-200 shadow-sm transition-all"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             <span>Refresh</span>
@@ -150,7 +146,7 @@ export const AdminOrdersPage: React.FC = () => {
           <p className="text-sm font-bold text-slate-700">No customer orders placed yet.</p>
         </div>
       ) : (
-        <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden">
+        <div className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
               <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider">
@@ -238,9 +234,12 @@ export const AdminOrdersPage: React.FC = () => {
                           onChange={(e) =>
                             handleUpdateStatus(order.id, e.target.value as OrderStatus)
                           }
-                          className="bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold focus:outline-hidden focus:ring-2 focus:ring-brand-500 disabled:opacity-50 cursor-pointer"
+                          className="bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-brand-500 disabled:opacity-50 cursor-pointer"
                         >
-                          {STATUS_OPTIONS.map((opt) => (
+                          {STATUS_OPTIONS.filter((_, index) => {
+                            const current = STATUS_OPTIONS.findIndex(option => option.value === order.status);
+                            return index === current || index === current + 1;
+                          }).map((opt) => (
                             <option key={opt.value} value={opt.value}>
                               {opt.label}
                             </option>

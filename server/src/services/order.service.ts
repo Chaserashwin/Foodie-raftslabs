@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { randomBytes, createHash } from 'node:crypto';
 import { Order, IOrder, OrderStatus, IOrderItem } from '../models/order.model.js';
 import { MenuItem } from '../models/menuItem.model.js';
 import { AppError } from '../middleware/errorHandler.middleware.js';
@@ -16,14 +17,22 @@ export class OrderService {
   private static generateOrderNumber(): string {
     const today = new Date();
     const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
-    const randomHex = Math.floor(1000 + Math.random() * 9000).toString();
+    const randomHex = randomBytes(12).toString('hex').toUpperCase();
     return `FD-${dateStr}-${randomHex}`;
   }
 
   /**
    * Create order calculating prices securely on the server
    */
-  public static async createOrder(data: CreateOrderInput): Promise<IOrder> {
+  public static async createOrder(data: CreateOrderInput, idempotencyKey?: string): Promise<IOrder> {
+    const requestHash = createHash('sha256').update(JSON.stringify(data)).digest('hex');
+    if (idempotencyKey) {
+      const existing = await Order.findOne({ idempotencyKey });
+      if (existing) {
+        if (existing.requestHash !== requestHash) throw new AppError('Idempotency key already used for a different order', 409);
+        return existing;
+      }
+    }
     const { customer, items: requestedItems } = data;
 
     if (!requestedItems || requestedItems.length === 0) {
@@ -31,7 +40,7 @@ export class OrderService {
     }
 
     // Extract unique product IDs
-    const productIds = requestedItems.map((item) => item.productId);
+    const productIds = requestedItems.map((item) => item.productId.toLowerCase());
 
     // Fetch all products from DB using trusted records
     const menuItems = await MenuItem.find({
@@ -54,13 +63,13 @@ export class OrderService {
     const orderItems: IOrderItem[] = [];
 
     for (const reqItem of requestedItems) {
-      const dbProduct = menuItemMap.get(reqItem.productId)!;
+      const dbProduct = menuItemMap.get(reqItem.productId.toLowerCase())!;
 
       if (!dbProduct.isAvailable) {
         throw new AppError(`Product "${dbProduct.name}" is currently unavailable`, 400);
       }
 
-      const itemSubtotal = dbProduct.price * reqItem.quantity;
+      const itemSubtotal = Math.round(dbProduct.price * 100) * reqItem.quantity / 100;
       subtotal += itemSubtotal;
 
       // Create immutable item snapshot
@@ -74,10 +83,12 @@ export class OrderService {
     }
 
     const deliveryFee = env.DELIVERY_FEE;
-    const total = subtotal + deliveryFee;
+    subtotal = Math.round(subtotal * 100) / 100;
+    const total = Math.round((subtotal + deliveryFee) * 100) / 100;
     const orderNumber = this.generateOrderNumber();
 
     const order = new Order({
+      ...(idempotencyKey && { idempotencyKey, requestHash }),
       orderNumber,
       customer: {
         name: customer.name.trim(),
@@ -98,7 +109,16 @@ export class OrderService {
       ],
     });
 
-    await order.save();
+    try {
+      await order.save();
+    } catch (err: any) {
+      if (err.code === 11000 && idempotencyKey) {
+        const existing = await Order.findOne({ idempotencyKey });
+        if (existing?.requestHash === requestHash) return existing;
+        throw new AppError('Idempotency key conflict', 409);
+      }
+      throw err;
+    }
     return order;
   }
 
@@ -158,15 +178,19 @@ export class OrderService {
       );
     }
 
-    order.status = targetStatus;
-    order.timeline.push({
-      status: targetStatus,
-      timestamp: new Date(),
-      note: note || `Order status updated to ${targetStatus}`,
-    });
-
-    await order.save();
-    return order;
+    const updated = await Order.findOneAndUpdate(
+      { _id: order._id, status: order.status },
+      { $set: { status: targetStatus }, $push: { timeline: {
+        status: targetStatus, timestamp: new Date(), note: note || `Order status updated to ${targetStatus}`,
+      } } },
+      { new: true, runValidators: true }
+    );
+    if (!updated) {
+      const current = await this.getOrderById(orderId);
+      if (current.status === targetStatus) return current;
+      throw new AppError('Order status changed concurrently; refresh and retry', 409);
+    }
+    return updated;
   }
 
   /**

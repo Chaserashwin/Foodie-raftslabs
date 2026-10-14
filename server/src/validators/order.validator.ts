@@ -42,7 +42,8 @@ export const createOrderSchema = z.object({
           .max(50, 'Quantity cannot exceed 50 per item'),
       })
     )
-    .min(1, 'Order must contain at least one item'),
+    .min(1, 'Order must contain at least one item').max(100)
+    .refine(items => new Set(items.map(i => i.productId.toLowerCase())).size === items.length, 'Duplicate product IDs are not allowed'),
 });
 
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;

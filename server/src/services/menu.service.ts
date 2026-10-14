@@ -14,7 +14,7 @@ export class MenuService {
     }
 
     if (filters.search) {
-      const searchRegex = new RegExp(filters.search.trim(), 'i');
+      const searchRegex = new RegExp(filters.search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
       query.$or = [{ name: searchRegex }, { description: searchRegex }];
     }
 

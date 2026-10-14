@@ -392,23 +392,126 @@ describe('Foodie Backend API Test Suite', () => {
       expect(newOrder.body.data.status).toBe('ORDER_RECEIVED');
 
       // Simulate step 1 -> PREPARING
-      const step1 = await request(app).post(`/api/orders/${simId}/simulate`);
+      const step1 = await request(app).post(`/api/orders/${simId}/simulate`).set('x-admin-key', env.ADMIN_API_KEY);
       expect(step1.status).toBe(200);
       expect(step1.body.data.status).toBe('PREPARING');
 
       // Simulate step 2 -> OUT_FOR_DELIVERY
-      const step2 = await request(app).post(`/api/orders/${simId}/simulate`);
+      const step2 = await request(app).post(`/api/orders/${simId}/simulate`).set('x-admin-key', env.ADMIN_API_KEY);
       expect(step2.status).toBe(200);
       expect(step2.body.data.status).toBe('OUT_FOR_DELIVERY');
 
       // Simulate step 3 -> DELIVERED
-      const step3 = await request(app).post(`/api/orders/${simId}/simulate`);
+      const step3 = await request(app).post(`/api/orders/${simId}/simulate`).set('x-admin-key', env.ADMIN_API_KEY);
       expect(step3.status).toBe(200);
       expect(step3.body.data.status).toBe('DELIVERED');
 
       // Simulate after DELIVERED -> 400
-      const step4 = await request(app).post(`/api/orders/${simId}/simulate`);
+      const step4 = await request(app).post(`/api/orders/${simId}/simulate`).set('x-admin-key', env.ADMIN_API_KEY);
       expect(step4.status).toBe(400);
     });
   });
+  describe('Audit security and edge-case regressions', () => {
+    const customer = { name: 'Audit Customer', phone: '9876543210', address: '42 Audit Road' };
+    const payload = () => ({ customer, items: [{ productId: sampleItem1._id.toString(), quantity: 1 }] });
+    it('treats regex characters as literal search input', async () => {
+      for (const search of ['[', '.*', '(a+)+$']) {
+        const res = await request(app).get('/api/menu').query({ search });
+        expect(res.status).toBe(200);
+        expect(res.body.data).toEqual([]);
+      }
+    });
+    it('returns 400 without stack or request contents for malformed JSON', async () => {
+      const res = await request(app).post('/api/orders').set('Content-Type', 'application/json').send('{invalid');
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({ success: false, error: 'Malformed JSON body' });
+    });
+    it('protects simulation and rejects invalid admin credentials', async () => {
+      const order = await request(app).post('/api/orders').send(payload());
+      for (const suffix of ['/simulate', '/status']) {
+        const res = suffix === '/simulate'
+          ? await request(app).post(`/api/orders/${order.body.data.id}${suffix}`)
+          : await request(app).patch(`/api/orders/${order.body.data.id}${suffix}`).set('x-admin-key', 'invalid').send({status: 'PREPARING'});
+        expect(res.status).toBe(401);
+      }
+      const read = await request(app).get(`/api/orders/${order.body.data.id}`);
+      expect(read.body.data.status).toBe('ORDER_RECEIVED');
+    });
+    it('ignores forged prices and totals', async () => {
+      const res = await request(app).post('/api/orders').send({ ...payload(), total: 1, deliveryFee: 0, items: [{ ...payload().items[0], price: 0, subtotal: 0 }] });
+      expect(res.status).toBe(201);
+      expect(res.body.data.total).toBe(sampleItem1.price + env.DELIVERY_FEE);
+    });
+    it.each([-1, 0, 51, 1.5, '2', null])('rejects quantity %s', async quantity => {
+      const res = await request(app).post('/api/orders').send({ customer, items: [{productId: sampleItem1._id.toString(), quantity}] });
+      expect(res.status).toBe(400);
+    });
+    it('rejects duplicate lines, malformed IDs and missing bodies', async () => {
+      const data = payload();
+      for (const body of [{...data, items: [data.items[0], data.items[0]]}, {...data, items: [{productId: 'bad', quantity: 1}]}, {}]) {
+        expect((await request(app).post('/api/orders').send(body)).status).toBe(400);
+      }
+    });
+    it.each(['limit=-1','limit=0','limit=101','limit=abc','skip=-1','skip=1.5'])('rejects pagination %s', async query => {
+      const res = await request(app).get(`/api/orders?${query}`).set('x-admin-key', env.ADMIN_API_KEY);
+      expect(res.status).toBe(400);
+    });
+    it('rejects unavailable products', async () => {
+      await MenuItem.updateOne({_id: sampleItem2._id}, {$set: {isAvailable: false}});
+      try {
+        const res = await request(app).post('/api/orders').send({customer, items: [{productId: sampleItem2._id.toString(), quantity: 1}]});
+        expect(res.status).toBe(400);
+      } finally { await MenuItem.updateOne({_id: sampleItem2._id}, {$set: {isAvailable: true}}); }
+    });
+    it('deduplicates concurrent retries and rejects changed payload reuse', async () => {
+      const key = 'audit-idempotency-0001';
+      const results = await Promise.all([1,2,3].map(() => request(app).post('/api/orders').set('Idempotency-Key',key).send(payload())));
+      expect(results.map(r => r.status)).toEqual([201,201,201]);
+      expect(new Set(results.map(r => r.body.data.id)).size).toBe(1);
+      expect(results[0].body.data).not.toHaveProperty('idempotencyKey');
+      const conflict = await request(app).post('/api/orders').set('Idempotency-Key',key).send({...payload(), customer: {...customer,name:'Different Customer'}});
+      expect(conflict.status).toBe(409);
+    });
+    it('does not duplicate history on concurrent status updates', async () => {
+      const order = await request(app).post('/api/orders').send(payload());
+      const results = await Promise.all([1,2,3].map(() => request(app).patch(`/api/orders/${order.body.data.id}/status`).set('x-admin-key',env.ADMIN_API_KEY).send({status:'PREPARING'})));
+      expect(results.map(r => r.status)).toEqual([200,200,200]);
+      const read = await request(app).get(`/api/orders/${order.body.data.id}`);
+      expect(read.body.data.timeline.map((t: any) => t.status)).toEqual(['ORDER_RECEIVED','PREPARING']);
+    });
+    it('exposes only public pricing configuration and restricts browser origins', async () => {
+      const config = await request(app).get('/api/config');
+      expect(config.body.data).toEqual({deliveryFee:env.DELIVERY_FEE});
+      const res = await request(app).get('/api/menu').set('Origin','https://untrusted.invalid');
+      expect(res.headers['access-control-allow-origin']).toBeUndefined();
+      expect(res.headers['access-control-allow-credentials']).toBeUndefined();
+    });
+    it('rejects unknown status values', async () => {
+      const order = await request(app).post('/api/orders').send(payload());
+      const res = await request(app).patch(`/api/orders/${order.body.data.id}/status`).set('x-admin-key',env.ADMIN_API_KEY).send({status:'CANCELLED'});
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('Validation Error');
+    });
+    it('preserves order snapshots after catalog changes and repairs only known broken images', async () => {
+      const order = await request(app).post('/api/orders').send(payload());
+      await MenuItem.updateOne({_id:sampleItem1._id},{$set:{price:999,name:'Changed catalog name',imageUrl:'https://example.com/custom.jpg'}});
+      try {
+        const read = await request(app).get(`/api/orders/${order.body.data.id}`);
+        expect(read.body.data.items[0].price).toBe(sampleItem1.price);
+        expect(read.body.data.items[0].name).toBe(sampleItem1.name);
+        const { seedDatabaseIfEmpty } = await import('../config/db.js');
+        const { LEGACY_IMAGE_REPLACEMENTS } = await import('../data/seedMenu.js');
+        await MenuItem.updateOne({_id:sampleItem2._id},{$set:{imageUrl:LEGACY_IMAGE_REPLACEMENTS[0][0]}});
+        const count = await MenuItem.countDocuments();
+        await seedDatabaseIfEmpty();
+        expect(await MenuItem.countDocuments()).toBe(count);
+        expect((await MenuItem.findById(sampleItem1._id))?.imageUrl).toBe('https://example.com/custom.jpg');
+        expect((await MenuItem.findById(sampleItem2._id))?.imageUrl).toBe(LEGACY_IMAGE_REPLACEMENTS[0][1]);
+      } finally {
+        await MenuItem.updateOne({_id:sampleItem1._id},{$set:{price:sampleItem1.price,name:sampleItem1.name,imageUrl:sampleItem1.imageUrl}});
+        await MenuItem.updateOne({_id:sampleItem2._id},{$set:{imageUrl:sampleItem2.imageUrl}});
+      }
+    });
+  });
+
 });

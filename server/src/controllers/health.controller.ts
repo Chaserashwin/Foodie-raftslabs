@@ -12,9 +12,10 @@ export class HealthController {
 
     const dbStatus = dbStateMap[mongoose.connection.readyState] || 'unknown';
 
-    res.status(200).json({
-      success: true,
-      status: 'UP',
+    const healthy = mongoose.connection.readyState === 1;
+    res.status(healthy ? 200 : 503).json({
+      success: healthy,
+      status: healthy ? 'UP' : 'DOWN',
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
       database: {

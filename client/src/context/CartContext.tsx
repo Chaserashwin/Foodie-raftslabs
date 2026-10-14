@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, ReactNode } from 'react';
 import { MenuItem, CartItem } from '../types';
+import { api } from '../services/api';
 
 interface CartContextType {
   items: CartItem[];
@@ -35,7 +36,12 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
               typeof item.product.id === 'string' &&
               typeof item.product.price === 'number' &&
               typeof item.quantity === 'number' &&
-              item.quantity > 0
+              Number.isFinite(item.product.price) && item.product.price >= 0 &&
+              typeof item.product.name === 'string' &&
+              typeof item.product.description === 'string' &&
+              typeof item.product.imageUrl === 'string' &&
+              Number.isFinite(item.product.rating) &&
+              Number.isInteger(item.quantity) && item.quantity > 0 && item.quantity <= 50
           );
         }
       }
@@ -44,6 +50,13 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
     return [];
   });
+
+  const [configuredFee, setConfiguredFee] = useState(STANDARD_DELIVERY_FEE);
+  useEffect(() => {
+    let active = true;
+    api.getPricing().then(config => { if (active) setConfiguredFee(config.deliveryFee); }).catch(() => {});
+    return () => { active = false; };
+  }, []);
 
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
 
@@ -75,6 +88,7 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   const updateQuantity = (productId: string, quantity: number) => {
+    if (!Number.isFinite(quantity)) return;
     if (quantity <= 0) {
       removeFromCart(productId);
       return;
@@ -100,15 +114,15 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   // Centralized calculations
   const subtotal = useMemo(() => {
-    return items.reduce((acc, item) => acc + item.product.price * item.quantity, 0);
+    return items.reduce((acc, item) => acc + Math.round(item.product.price * 100) * item.quantity, 0) / 100;
   }, [items]);
 
   const deliveryFee = useMemo(() => {
-    return items.length > 0 ? STANDARD_DELIVERY_FEE : 0;
-  }, [items]);
+    return items.length > 0 ? configuredFee : 0;
+  }, [items, configuredFee]);
 
   const total = useMemo(() => {
-    return subtotal + deliveryFee;
+    return Math.round((subtotal + deliveryFee) * 100) / 100;
   }, [subtotal, deliveryFee]);
 
   const totalItemCount = useMemo(() => {

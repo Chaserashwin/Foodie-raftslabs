@@ -48,6 +48,10 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 }
 
 export const api = {
+  getPricing: async (): Promise<{ deliveryFee: number }> => {
+    const res = await request<{ data: { deliveryFee: number } }>('/config');
+    return res.data;
+  },
   // Menu
   getMenu: async (category?: string, search?: string): Promise<MenuItem[]> => {
     const params = new URLSearchParams();
@@ -68,8 +72,9 @@ export const api = {
   createOrder: async (payload: {
     customer: { name: string; phone: string; address: string };
     items: { productId: string; quantity: number }[];
-  }): Promise<Order> => {
+  }, idempotencyKey?: string): Promise<Order> => {
     const res = await request<{ data: Order; message: string }>('/orders', {
+      headers: idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {},
       method: 'POST',
       body: JSON.stringify(payload),
     });
@@ -108,9 +113,10 @@ export const api = {
   },
 
   // Simulation
-  simulateProgression: async (orderId: string): Promise<Order> => {
+  simulateProgression: async (orderId: string, adminKey: string): Promise<Order> => {
     const res = await request<{ data: Order; message: string }>(`/orders/${orderId}/simulate`, {
       method: 'POST',
+      headers: { 'x-admin-key': adminKey },
     });
     return res.data;
   },

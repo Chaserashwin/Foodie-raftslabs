@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   User,
@@ -18,6 +18,8 @@ import { formatCurrency } from '../utils/formatCurrency';
 export const CheckoutPage: React.FC = () => {
   const { items, subtotal, deliveryFee, total, clearCart } = useCart();
   const navigate = useNavigate();
+  const submittingRef = useRef(false);
+  const attemptRef = useRef<{ payload: string; key: string } | null>(null);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -33,7 +35,7 @@ export const CheckoutPage: React.FC = () => {
   if (items.length === 0) {
     return (
       <div className="max-w-md mx-auto px-4 py-20 text-center">
-        <div className="w-20 h-20 bg-orange-50 text-brand-500 rounded-3xl flex items-center justify-center mx-auto mb-5 shadow-xs">
+        <div className="w-20 h-20 bg-orange-50 text-brand-500 rounded-3xl flex items-center justify-center mx-auto mb-5 shadow-sm">
           <ShoppingBag className="w-10 h-10" />
         </div>
         <h2 className="text-2xl font-black text-slate-900">Your basket is empty</h2>
@@ -67,7 +69,7 @@ export const CheckoutPage: React.FC = () => {
     e.preventDefault();
 
     // Prevent duplicate submissions caused by repeated clicks
-    if (isSubmitting) return;
+    if (submittingRef.current) return;
 
     // Validate form fields
     const validation = validateCustomerForm(formData);
@@ -77,6 +79,7 @@ export const CheckoutPage: React.FC = () => {
     }
 
     try {
+      submittingRef.current = true;
       setIsSubmitting(true);
       setServerError(null);
 
@@ -94,7 +97,11 @@ export const CheckoutPage: React.FC = () => {
         })),
       };
 
-      const placedOrder = await api.createOrder(payload);
+      const serialized = JSON.stringify(payload);
+      if (attemptRef.current?.payload !== serialized) {
+        attemptRef.current = { payload: serialized, key: crypto.randomUUID() };
+      }
+      const placedOrder = await api.createOrder(payload, attemptRef.current.key);
 
       // Clear the local cart
       clearCart();
@@ -122,6 +129,7 @@ export const CheckoutPage: React.FC = () => {
         setServerError(err.message || 'Failed to place order. Please try again.');
       }
     } finally {
+      submittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -142,7 +150,7 @@ export const CheckoutPage: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
         {/* Left: Customer Information Form */}
         <div className="lg:col-span-7 space-y-6">
-          <div className="bg-white rounded-3xl border border-slate-200/80 p-6 sm:p-8 shadow-xs">
+          <div className="bg-white rounded-3xl border border-slate-200/80 p-6 sm:p-8 shadow-sm">
             <h1 className="text-2xl font-black text-slate-900 mb-1">
               Delivery Details
             </h1>
@@ -159,18 +167,20 @@ export const CheckoutPage: React.FC = () => {
             <form onSubmit={handleSubmit} className="space-y-5">
               {/* Name */}
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
+                <label htmlFor="customer-name" className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
                   Full Name <span className="text-rose-500">*</span>
                 </label>
                 <div className="relative">
                   <User className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
+                    id="customer-name"
+                    autoComplete="name"
                     placeholder="e.g. Rahul Sharma"
                     value={formData.name}
                     onChange={(e) => handleInputChange('name', e.target.value)}
                     disabled={isSubmitting}
-                    className={`w-full bg-slate-50 border rounded-2xl pl-11 pr-4 py-3 text-sm focus:outline-hidden focus:ring-2 transition-all ${
+                    className={`w-full bg-slate-50 border rounded-2xl pl-11 pr-4 py-3 text-sm focus:outline-none focus:ring-2 transition-all ${
                       fieldErrors.name
                         ? 'border-rose-300 focus:ring-rose-200 bg-rose-50/30'
                         : 'border-slate-200 focus:ring-brand-500/20 focus:border-brand-500'
@@ -186,18 +196,20 @@ export const CheckoutPage: React.FC = () => {
 
               {/* Phone */}
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
+                <label htmlFor="customer-phone" className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
                   Mobile Phone Number <span className="text-rose-500">*</span>
                 </label>
                 <div className="relative">
                   <Phone className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
                   <input
                     type="tel"
+                    id="customer-phone"
+                    autoComplete="tel"
                     placeholder="e.g. 9876543210 or +91 9876543210"
                     value={formData.phone}
                     onChange={(e) => handleInputChange('phone', e.target.value)}
                     disabled={isSubmitting}
-                    className={`w-full bg-slate-50 border rounded-2xl pl-11 pr-4 py-3 text-sm focus:outline-hidden focus:ring-2 transition-all ${
+                    className={`w-full bg-slate-50 border rounded-2xl pl-11 pr-4 py-3 text-sm focus:outline-none focus:ring-2 transition-all ${
                       fieldErrors.phone
                         ? 'border-rose-300 focus:ring-rose-200 bg-rose-50/30'
                         : 'border-slate-200 focus:ring-brand-500/20 focus:border-brand-500'
@@ -217,18 +229,20 @@ export const CheckoutPage: React.FC = () => {
 
               {/* Delivery Address */}
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
+                <label htmlFor="customer-address" className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-2">
                   Delivery Address <span className="text-rose-500">*</span>
                 </label>
                 <div className="relative">
                   <MapPin className="w-4 h-4 text-slate-400 absolute left-4 top-4" />
                   <textarea
+                    id="customer-address"
+                    autoComplete="street-address"
                     rows={3}
                     placeholder="House/Flat number, Building name, Street name, Landmark, City"
                     value={formData.address}
                     onChange={(e) => handleInputChange('address', e.target.value)}
                     disabled={isSubmitting}
-                    className={`w-full bg-slate-50 border rounded-2xl pl-11 pr-4 py-3 text-sm focus:outline-hidden focus:ring-2 transition-all ${
+                    className={`w-full bg-slate-50 border rounded-2xl pl-11 pr-4 py-3 text-sm focus:outline-none focus:ring-2 transition-all ${
                       fieldErrors.address
                         ? 'border-rose-300 focus:ring-rose-200 bg-rose-50/30'
                         : 'border-slate-200 focus:ring-brand-500/20 focus:border-brand-500'
@@ -268,7 +282,7 @@ export const CheckoutPage: React.FC = () => {
 
         {/* Right: Order Summary Sidebar */}
         <div className="lg:col-span-5 space-y-6">
-          <div className="bg-white rounded-3xl border border-slate-200/80 p-6 sm:p-8 shadow-xs">
+          <div className="bg-white rounded-3xl border border-slate-200/80 p-6 sm:p-8 shadow-sm">
             <h2 className="text-lg font-black text-slate-900 mb-4 flex items-center justify-between">
               <span>Order Summary</span>
               <span className="text-xs font-bold bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full">
