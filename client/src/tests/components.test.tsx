@@ -73,8 +73,8 @@ describe('Frontend Components Test Suite', () => {
   describe('OrderTimeline Component', () => {
     it('renders all order stages and highlights current stage', () => {
       const timeline: OrderTimelineItem[] = [
-        { status: 'ORDER_RECEIVED', timestamp: new Date().toISOString(), note: 'Order placed' },
-        { status: 'PREPARING', timestamp: new Date().toISOString(), note: 'In the kitchen' },
+        { status: 'ORDER_RECEIVED', timestamp: new Date().toISOString() },
+        { status: 'PREPARING', timestamp: new Date().toISOString() },
       ];
 
       render(<OrderTimeline currentStatus="PREPARING" timeline={timeline} />);
@@ -83,7 +83,7 @@ describe('Frontend Components Test Suite', () => {
       expect(screen.getByText('Preparing')).toBeInTheDocument();
       expect(screen.getByText('Out for Delivery')).toBeInTheDocument();
       expect(screen.getByText('Delivered')).toBeInTheDocument();
-      expect(screen.getByText('In the kitchen')).toBeInTheDocument();
+      expect(screen.getByText('Our gourmet chefs are cooking your fresh meal.')).toBeInTheDocument();
     });
   });
 

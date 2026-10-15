@@ -29,7 +29,7 @@ export function errorHandler(
   if (err instanceof ZodError) {
     const formattedErrors = err.errors.map((e) => ({
       field: e.path.join('.'),
-      message: e.message,
+      message: e.code === 'invalid_enum_value' ? 'Invalid field value' : e.message,
     }));
 
     res.status(400).json({
@@ -44,7 +44,7 @@ export function errorHandler(
   if (err instanceof mongoose.Error.CastError) {
     res.status(400).json({
       success: false,
-      error: `Invalid ${err.path}: ${err.value}`,
+      error: 'Invalid field value',
     });
     return;
   }
@@ -53,7 +53,7 @@ export function errorHandler(
   if (err instanceof mongoose.Error.ValidationError) {
     const details = Object.values(err.errors).map((e) => ({
       field: e.path,
-      message: e.message,
+      message: 'Invalid field value',
     }));
 
     res.status(400).json({

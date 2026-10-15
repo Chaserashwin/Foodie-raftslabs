@@ -1,4 +1,4 @@
-import { MenuItem, Order, OrderStatus } from '../types';
+import { MenuItem, Order, AdminOrder, OrderStatus } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
@@ -26,6 +26,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   try {
     response = await fetch(url, {
       ...options,
+      cache: 'no-store',
       headers,
     });
   } catch (err: any) {
@@ -87,8 +88,8 @@ export const api = {
   },
 
   // Admin
-  getAllOrders: async (adminKey: string, limit = 50, skip = 0): Promise<{ orders: Order[]; total: number }> => {
-    const res = await request<{ data: Order[]; total: number }>(`/orders?limit=${limit}&skip=${skip}`, {
+  getAllOrders: async (adminKey: string, limit = 50, skip = 0): Promise<{ orders: AdminOrder[]; total: number }> => {
+    const res = await request<{ data: AdminOrder[]; total: number }>(`/orders?limit=${limit}&skip=${skip}`, {
       headers: {
         'x-admin-key': adminKey,
       },
@@ -101,8 +102,8 @@ export const api = {
     status: OrderStatus,
     adminKey: string,
     note?: string
-  ): Promise<Order> => {
-    const res = await request<{ data: Order; message: string }>(`/orders/${orderId}/status`, {
+  ): Promise<AdminOrder> => {
+    const res = await request<{ data: AdminOrder; message: string }>(`/orders/${orderId}/status`, {
       method: 'PATCH',
       headers: {
         'x-admin-key': adminKey,
@@ -113,8 +114,8 @@ export const api = {
   },
 
   // Simulation
-  simulateProgression: async (orderId: string, adminKey: string): Promise<Order> => {
-    const res = await request<{ data: Order; message: string }>(`/orders/${orderId}/simulate`, {
+  simulateProgression: async (orderId: string, adminKey: string): Promise<AdminOrder> => {
+    const res = await request<{ data: AdminOrder; message: string }>(`/orders/${orderId}/simulate`, {
       method: 'POST',
       headers: { 'x-admin-key': adminKey },
     });

@@ -41,13 +41,15 @@ export interface OrderSnapshotItem {
 export interface OrderTimelineItem {
   status: OrderStatus;
   timestamp: string;
+}
+
+export interface AdminOrderTimelineItem extends OrderTimelineItem {
   note?: string;
 }
 
 export interface Order {
   id: string;
   orderNumber: string;
-  customer: OrderCustomer;
   items: OrderSnapshotItem[];
   subtotal: number;
   deliveryFee: number;
@@ -56,4 +58,10 @@ export interface Order {
   timeline: OrderTimelineItem[];
   createdAt: string;
   updatedAt: string;
+}
+
+/** Private dispatch data is returned only by authorized administrative operations. */
+export interface AdminOrder extends Order {
+  customer: OrderCustomer;
+  timeline: AdminOrderTimelineItem[];
 }

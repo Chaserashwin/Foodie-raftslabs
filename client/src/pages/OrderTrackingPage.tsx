@@ -5,9 +5,6 @@ import {
   RefreshCw,
   ShoppingBag,
   Calendar,
-  MapPin,
-  Phone,
-  User,
   Sparkles,
 } from 'lucide-react';
 import { Order } from '../types';
@@ -104,6 +101,7 @@ export const OrderTrackingPage: React.FC = () => {
             <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
             <input
               type="text"
+              aria-label="Order tracking identifier"
               placeholder="Enter Order ID (e.g. FD-20261013-1234)"
               value={searchId}
               onChange={(e) => setSearchId(e.target.value)}
@@ -138,11 +136,11 @@ export const OrderTrackingPage: React.FC = () => {
           <div className="bg-white rounded-3xl border border-slate-200/80 p-6 sm:p-8 shadow-sm">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100">
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
                     Order Number
                   </span>
-                  <span className="font-mono font-black text-slate-900 text-sm bg-slate-100 px-2 py-0.5 rounded-lg">
+                  <span className="font-mono font-black text-slate-900 text-sm break-all bg-slate-100 px-2 py-0.5 rounded-lg">
                     {order.orderNumber}
                   </span>
                 </div>
@@ -185,7 +183,7 @@ export const OrderTrackingPage: React.FC = () => {
           </div>
 
           {/* Details & Items Breakdown Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 gap-6">
             {/* Ordered Items */}
             <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-sm">
               <h3 className="font-black text-sm uppercase tracking-wider text-slate-900 mb-4 flex items-center gap-2">
@@ -225,28 +223,7 @@ export const OrderTrackingPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Delivery Recipient Info */}
-            <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-sm">
-              <h3 className="font-black text-sm uppercase tracking-wider text-slate-900 mb-4 flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-brand-500" />
-                <span>Delivery Recipient</span>
-              </h3>
 
-              <div className="space-y-3 text-xs text-slate-700 bg-slate-50 p-4 rounded-2xl">
-                <div className="flex items-center gap-2 font-bold text-slate-900">
-                  <User className="w-4 h-4 text-slate-400" />
-                  <span>{order.customer.name}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Phone className="w-4 h-4 text-slate-400" />
-                  <span>{order.customer.phone}</span>
-                </div>
-                <div className="flex items-start gap-2">
-                  <MapPin className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
-                  <span className="leading-relaxed">{order.customer.address}</span>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       )}

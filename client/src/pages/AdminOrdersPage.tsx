@@ -8,7 +8,7 @@ import {
   Truck,
   Utensils,
 } from 'lucide-react';
-import { Order, OrderStatus } from '../types';
+import { AdminOrder, OrderStatus } from '../types';
 import { api } from '../services/api';
 import { formatCurrency } from '../utils/formatCurrency';
 import { LoadingSpinner } from '../components/LoadingSpinner';
@@ -24,7 +24,7 @@ export const AdminOrdersPage: React.FC = () => {
   const [adminKey, setAdminKey] = useState<string>('');
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [inputKey, setInputKey] = useState<string>(adminKey);
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [statusUpdating, setStatusUpdating] = useState<string | null>(null);

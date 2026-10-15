@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, renderHook, act } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { CartProvider, useCart } from '../context/CartContext';
@@ -8,16 +8,19 @@ import { AdminOrdersPage } from '../pages/AdminOrdersPage';
 import { OrderConfirmationPage } from '../pages/OrderConfirmationPage';
 import { ProductCard } from '../components/ProductCard';
 import { api, ApiError } from '../services/api';
-import { MenuItem, Order } from '../types';
+import { MenuItem, Order, AdminOrder } from '../types';
+import { OrderTimeline } from '../components/OrderTimeline';
 
 const product: MenuItem = { id:'123456789012345678901234', name:'Audit Pizza', description:'Test food', price:10.1, category:'pizzas', imageUrl:'https://example.com/food.jpg', isAvailable:true, rating:4, prepTime:'10 min', isVeg:true };
-const order: Order = { id:'123456789012345678901235', orderNumber:'FD-20261014-AUDIT', customer:{name:'QA Customer',phone:'9876543210',address:'42 QA Test Road'}, items:[{productId:product.id,name:product.name,price:10.1,quantity:1,subtotal:10.1}],subtotal:10.1,deliveryFee:40,total:50.1,status:'ORDER_RECEIVED',timeline:[{status:'ORDER_RECEIVED',timestamp:new Date().toISOString()}],createdAt:new Date().toISOString(),updatedAt:new Date().toISOString() };
+const customer = {name:'QA Customer',phone:'9876543210',address:'42 QA Test Road'};
+const order: Order = { id:'123456789012345678901235', orderNumber:'FD-20261014-AUDIT', items:[{productId:product.id,name:product.name,price:10.1,quantity:1,subtotal:10.1}],subtotal:10.1,deliveryFee:40,total:50.1,status:'ORDER_RECEIVED',timeline:[{status:'ORDER_RECEIVED',timestamp:new Date().toISOString()}],createdAt:new Date().toISOString(),updatedAt:new Date().toISOString() };
 const wrapper = ({ children }: { children: React.ReactNode }) => <CartProvider>{children}</CartProvider>;
 
 beforeEach(() => {
   vi.restoreAllMocks();
   vi.spyOn(api,'getPricing').mockResolvedValue({deliveryFee:40});
 });
+afterEach(() => { vi.useRealTimers(); });
 
 describe('Audit checkout and persistence regressions', () => {
   it('restores a persisted cart after provider remount with exact totals', () => {
@@ -58,7 +61,7 @@ describe('Audit checkout and persistence regressions', () => {
     await screen.findByText('Confirmed audit order');
     expect(create).toHaveBeenCalledTimes(2);
     expect(create.mock.calls[0][1]).toBe(create.mock.calls[1][1]);
-    expect(create.mock.calls[0][0]).toEqual({customer:order.customer,items:[{productId:product.id,quantity:1}]});
+    expect(create.mock.calls[0][0]).toEqual({customer:customer,items:[{productId:product.id,quantity:1}]});
     expect(JSON.parse(localStorage.getItem('foodie_cart_items_v1')!)).toEqual([]);
   });
   it('reloads order tracking from its URL and shows delivered status', async () => {
@@ -79,9 +82,9 @@ describe('Audit checkout and persistence regressions', () => {
     let resolve!: (value: Order) => void;
     const create = vi.spyOn(api,'createOrder').mockImplementation(() => new Promise(done => { resolve = done; }));
     render(<MemoryRouter><CartProvider><CheckoutPage/></CartProvider></MemoryRouter>);
-    fireEvent.change(screen.getByLabelText(/Full Name/),{target:{value:order.customer.name}});
-    fireEvent.change(screen.getByLabelText(/Mobile Phone Number/),{target:{value:order.customer.phone}});
-    fireEvent.change(screen.getByLabelText(/Delivery Address/),{target:{value:order.customer.address}});
+    fireEvent.change(screen.getByLabelText(/Full Name/),{target:{value:customer.name}});
+    fireEvent.change(screen.getByLabelText(/Mobile Phone Number/),{target:{value:customer.phone}});
+    fireEvent.change(screen.getByLabelText(/Delivery Address/),{target:{value:customer.address}});
     const button = screen.getByRole('button',{name:/Place Order/});
     fireEvent.click(button); fireEvent.click(button);
     expect(create).toHaveBeenCalledTimes(1);
@@ -108,5 +111,67 @@ describe('Audit checkout and persistence regressions', () => {
     const image = screen.getByAltText(product.name);
     fireEvent.error(image);
     expect(image.getAttribute('src')).toMatch(/^data:image\/svg\+xml,/);
+  });
+  it('renders confirmation and tracking with the safe schema and no contact details', async () => {
+    vi.spyOn(api,'getOrderById').mockResolvedValue(order);
+    const confirmation = render(<MemoryRouter initialEntries={['/order-confirmed/'+order.orderNumber]}><Routes><Route path='/order-confirmed/:orderId' element={<OrderConfirmationPage/>}/></Routes></MemoryRouter>);
+    await screen.findByText('Order Successfully Placed');
+    expect(screen.getByText('Thank you for your order!')).toBeInTheDocument();
+    for (const value of Object.values(customer)) expect(screen.queryByText(value)).not.toBeInTheDocument();
+    expect(screen.queryByText('Delivery Address')).not.toBeInTheDocument();
+    confirmation.unmount();
+    render(<MemoryRouter initialEntries={['/track/'+order.id]}><Routes><Route path='/track/:orderId' element={<OrderTrackingPage/>}/></Routes></MemoryRouter>);
+    await screen.findByText(order.orderNumber);
+    expect(screen.getByText(product.name)).toBeInTheDocument();
+    for (const value of Object.values(customer)) expect(screen.queryByText(value)).not.toBeInTheDocument();
+    expect(screen.queryByText('Delivery Recipient')).not.toBeInTheDocument();
+  });
+  it('ignores free-form staff notes in the public timeline even if stale data includes them', () => {
+    const legacyTimeline = [{status: 'ORDER_RECEIVED' as const, timestamp:order.createdAt,note:customer.phone+' '+customer.address}];
+    render(<OrderTimeline currentStatus='ORDER_RECEIVED' timeline={legacyTimeline}/>);
+    expect(screen.queryByText(legacyTimeline[0].note)).not.toBeInTheDocument();
+    expect(screen.getByText('We have received your order and sent it to the kitchen.')).toBeInTheDocument();
+  });
+  it('shows contact details only after authorized admin login and can update status', async () => {
+    const adminOrder: AdminOrder = {...order,customer};
+    const list = vi.spyOn(api,'getAllOrders').mockResolvedValue({orders:[adminOrder],total:1});
+    const update = vi.spyOn(api,'updateOrderStatus').mockResolvedValue({...adminOrder,status:'PREPARING'});
+    render(<AdminOrdersPage/>);
+    expect(list).not.toHaveBeenCalled();
+    for (const value of Object.values(customer)) expect(screen.queryByText(value)).not.toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText('Enter Admin API Key'),{target:{value:'test-only-admin-login'}});
+    fireEvent.click(screen.getByRole('button',{name:'Authenticate Portal'}));
+    await screen.findByText(customer.phone);
+    expect(screen.getByText(customer.address)).toBeInTheDocument();
+    expect(list).toHaveBeenCalledWith('test-only-admin-login');
+    fireEvent.change(screen.getByRole('combobox'),{target:{value:'PREPARING'}});
+    await waitFor(() => expect(screen.getByRole('combobox')).toHaveValue('PREPARING'));
+    expect(update).toHaveBeenCalledWith(order.id,'PREPARING','test-only-admin-login');
+  });
+  it('polls changed statuses, retains last-known details on outage, recovers and stops polling at delivery', async () => {
+    vi.useFakeTimers();
+    const preparing: Order = {...order,status:'PREPARING',timeline:[...order.timeline,{status:'PREPARING',timestamp:new Date().toISOString()}]};
+    const delivered: Order = {...preparing,status:'DELIVERED',timeline:[...preparing.timeline,{status:'OUT_FOR_DELIVERY',timestamp:new Date().toISOString()},{status:'DELIVERED',timestamp:new Date().toISOString()}]};
+    const read = vi.spyOn(api,'getOrderById').mockResolvedValueOnce(order).mockResolvedValueOnce(preparing).mockRejectedValueOnce(new ApiError('Temporary outage',0)).mockResolvedValueOnce(delivered);
+    render(<MemoryRouter initialEntries={['/track/'+order.orderNumber]}><Routes><Route path='/track/:orderId' element={<OrderTrackingPage/>}/></Routes></MemoryRouter>);
+    await act(async () => {});
+    expect(screen.getByText(order.orderNumber)).toBeInTheDocument();
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(screen.getByText('Our gourmet chefs are cooking your fresh meal.')).toBeInTheDocument();
+    expect(screen.getByText('Preparing').closest('[aria-current="step"]')).toBeInTheDocument();
+    // Timestamp history grows on the successful status change.
+    expect(document.querySelectorAll('span.self-start')).toHaveLength(2);
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    expect(screen.getByRole('alert')).toHaveTextContent('Showing last known status');
+    expect(screen.getByText(order.orderNumber)).toBeInTheDocument();
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('button',{name:'Refresh Status'})).toBeInTheDocument();
+    expect(screen.getByText('Delivered').closest('[aria-current="step"]')).toBeInTheDocument();
+    expect(document.querySelectorAll('span.self-start')).toHaveLength(4);
+    await act(async () => { await vi.advanceTimersByTimeAsync(10000); });
+    expect(read).toHaveBeenCalledTimes(4);
+    expect(screen.queryByRole('button',{name:'Advance Status'})).not.toBeInTheDocument();
   });
 });

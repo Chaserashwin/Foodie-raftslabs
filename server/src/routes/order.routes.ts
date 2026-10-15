@@ -4,6 +4,12 @@ import { requireAdminAuth } from '../middleware/auth.middleware.js';
 
 const router = Router();
 
+// Neither public tracking nor private dispatch data should be cached by browsers/CDNs.
+router.use((_req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  next();
+});
+
 // Public customer endpoints
 router.post('/', OrderController.createOrder);
 router.get('/:id', OrderController.getOrderById);

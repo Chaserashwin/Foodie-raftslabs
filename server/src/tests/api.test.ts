@@ -4,10 +4,77 @@ import { app } from '../app.js';
 import { connectDatabase, disconnectDatabase } from '../config/db.js';
 import { env } from '../config/env.js';
 import { MenuItem } from '../models/menuItem.model.js';
+import { Order } from '../models/order.model.js';
 
 describe('Foodie Backend API Test Suite', () => {
   let sampleItem1: any;
   let sampleItem2: any;
+
+  describe('Release privacy regressions', () => {
+    const customer = { name: 'Private Release Customer', phone: '9876543210', address: '42 Confidential Delivery Road' };
+    const payload = () => ({ customer, items: [{ productId: sampleItem1._id.toString(), quantity: 2 }] });
+    function expectPublicOrder(data: any) {
+      expect(Object.keys(data).sort()).toEqual(['id', 'orderNumber', 'items', 'subtotal', 'deliveryFee', 'total', 'status', 'timeline', 'createdAt', 'updatedAt'].sort());
+      expect(data).not.toHaveProperty('customer');
+      for (const value of Object.values(customer)) expect(JSON.stringify(data)).not.toContain(value);
+      for (const entry of data.timeline) expect(Object.keys(entry).sort()).toEqual(['status', 'timestamp']);
+      expect(Object.keys(data.items[0]).sort()).toEqual(['productId', 'name', 'price', 'quantity', 'subtotal'].sort());
+    }
+    it('creation and idempotent replay return only the public schema while retaining private data in MongoDB', async () => {
+      const key = 'release-private-replay-001';
+      const created = await request(app).post('/api/orders').set('Idempotency-Key', key).send(payload());
+      expect(created.status).toBe(201);
+      expectPublicOrder(created.body.data);
+      const stored = await Order.findById(created.body.data.id);
+      expect(stored?.customer.name).toBe(customer.name);
+      expect(stored?.customer.phone).toBe(customer.phone);
+      expect(stored?.customer.address).toBe(customer.address);
+      const replay = await request(app).post('/api/orders').set('Idempotency-Key', key).send(payload());
+      expect(replay.status).toBe(201);
+      expect(replay.body.data.id).toBe(created.body.data.id);
+      expectPublicOrder(replay.body.data);
+      expect(replay.headers['cache-control']).toBe('no-store');
+    });
+    it.each(['id', 'orderNumber'])('lookup by %s strips customer data and private notes even when an admin header is supplied', async lookup => {
+      const created = await request(app).post('/api/orders').send(payload());
+      const order = created.body.data;
+      const note = `Call ${customer.phone} at ${customer.address} for ${customer.name}`;
+      const update = await request(app).patch(`/api/orders/${order.id}/status`).set('x-admin-key', env.ADMIN_API_KEY).send({ status: 'PREPARING', note });
+      expect(update.status).toBe(200);
+      expect(update.body.data.customer).toEqual(customer);
+      expect(update.body.data.timeline[1].note).toBe(note);
+      for (const authenticated of [false, true]) {
+        const req = request(app).get(`/api/orders/${order[lookup]}`);
+        if (authenticated) req.set('x-admin-key', env.ADMIN_API_KEY);
+        const res = await req;
+        expect(res.status).toBe(200);
+        expectPublicOrder(res.body.data);
+        expect(res.body.data.status).toBe('PREPARING');
+        expect(res.body.data.timeline.map((entry: any) => entry.status)).toEqual(['ORDER_RECEIVED', 'PREPARING']);
+        expect(res.headers['cache-control']).toBe('no-store');
+      }
+    });
+    it('authorized administration retains dispatch details and unauthorized callers cannot access them', async () => {
+      const created = await request(app).post('/api/orders').send(payload());
+      const list = await request(app).get('/api/orders').set('x-admin-key', env.ADMIN_API_KEY);
+      expect(list.status).toBe(200);
+      expect(list.body.data.find((order: any) => order.id === created.body.data.id).customer).toEqual(customer);
+      expect(list.headers['cache-control']).toBe('no-store');
+      for (const route of ['list', 'status', 'simulate']) {
+        const res = route === 'list' ? await request(app).get('/api/orders')
+          : route === 'status' ? await request(app).patch(`/api/orders/${created.body.data.id}/status`).send({status:'PREPARING'})
+          : await request(app).post(`/api/orders/${created.body.data.id}/simulate`);
+        expect(res.status).toBe(401);
+        for (const value of Object.values(customer)) expect(JSON.stringify(res.body)).not.toContain(value);
+      }
+    });
+    it('unknown identifier errors do not echo private user input', async () => {
+      const privateInput = `${customer.name} ${customer.phone} ${customer.address}`;
+      const res = await request(app).get(`/api/orders/${encodeURIComponent(privateInput)}`);
+      expect(res.status).toBe(404);
+      expect(res.body).toEqual({success:false,error:'Order not found'});
+    });
+  });
 
   beforeAll(async () => {
     process.env.NODE_ENV = 'test';
@@ -116,7 +183,8 @@ describe('Foodie Backend API Test Suite', () => {
       expect(res.body.success).toBe(true);
       expect(res.body.data).toHaveProperty('id');
       expect(res.body.data).toHaveProperty('orderNumber');
-      expect(res.body.data.customer.name).toBe('Jane Doe');
+      expect(res.body.data).not.toHaveProperty('customer');
+      expect((await Order.findById(res.body.data.id))?.customer.name).toBe('Jane Doe');
       expect(res.body.data.status).toBe('ORDER_RECEIVED');
       expect(res.body.data.subtotal).toBe(expectedSubtotal);
       expect(res.body.data.deliveryFee).toBe(env.DELIVERY_FEE);
@@ -244,7 +312,8 @@ describe('Foodie Backend API Test Suite', () => {
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
       expect(res.body.data.id).toBe(createdOrderId);
-      expect(res.body.data.customer.name).toBe('Test Tracker');
+      expect(res.body.data).not.toHaveProperty('customer');
+      expect((await Order.findById(createdOrderId))?.customer.name).toBe('Test Tracker');
     });
 
     it('GET /api/orders/:id should retrieve order by friendly Order Number', async () => {

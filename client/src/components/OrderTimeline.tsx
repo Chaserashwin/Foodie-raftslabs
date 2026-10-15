@@ -67,7 +67,7 @@ export const OrderTimeline: React.FC<OrderTimelineProps> = ({ currentStatus, tim
             const StepIcon = step.icon;
 
             return (
-              <div key={step.status} className="relative flex items-start gap-4 sm:gap-6">
+              <div key={step.status} aria-current={isCurrent ? 'step' : undefined} className="relative flex items-start gap-4 sm:gap-6">
                 {/* Connecting line between steps */}
                 {idx < STEPS.length - 1 && (
                   <div
@@ -124,7 +124,7 @@ export const OrderTimeline: React.FC<OrderTimelineProps> = ({ currentStatus, tim
                       isPending ? 'text-slate-400' : 'text-slate-600'
                     }`}
                   >
-                    {timelineEntry?.note || step.description}
+                    {step.description}
                   </p>
                 </div>
               </div>

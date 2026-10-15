@@ -4,7 +4,7 @@ const key = process.env.AUDIT_ADMIN_KEY;
 if (!key) throw new Error('Set AUDIT_ADMIN_KEY for the disposable local QA server');
 async function call(path, method='GET', body, headers={}) {
   const response = await fetch(base+path, { method, headers: { 'Content-Type':'application/json', ...headers }, ...(body && {body:JSON.stringify(body)}), signal:AbortSignal.timeout(15000) });
-  return {status:response.status, data:await response.json()};
+  return {status:response.status, data:await response.json(), cacheControl:response.headers.get('cache-control')};
 }
 const health = await call('/health'); assert.equal(health.status,200); assert.equal(health.data.database.readyState,1);
 const menu = await call('/menu'); assert.equal(menu.status,200); assert.equal(menu.data.data.length,16);
@@ -19,7 +19,14 @@ assert.equal((await call('/orders','POST',{...payload,customer:{...customer,phon
 const attemptKey = crypto.randomUUID();
 const created = await call('/orders','POST',payload,{'Idempotency-Key':attemptKey});
 assert.equal(created.status,201);
+assert.equal(created.cacheControl,'no-store');
 let order = created.data.data;
+function assertPublic(data) {
+  assert.ok(!('customer' in data), 'Public order contains customer data');
+  for (const value of Object.values(customer)) assert.ok(!JSON.stringify(data).includes(value), 'Public order exposes private fields');
+  for (const entry of data.timeline) assert.ok(!('note' in entry), 'Public history contains staff notes');
+}
+assertPublic(order);
 assert.equal(order.subtotal,products[0].price*3);
 const config = await call('/config'); assert.equal(order.total,order.subtotal+config.data.data.deliveryFee);
 assert.equal((await call('/orders','POST',payload,{'Idempotency-Key':attemptKey})).data.data.id,order.id);
@@ -27,14 +34,24 @@ console.log('PASS: invalid checkout, trusted totals, valid checkout and idempote
 assert.equal((await call(`/orders/${order.id}/simulate`,'POST')).status,401);
 assert.equal((await call(`/orders/${order.id}/status`,'PATCH',{status:'DELIVERED'},{'x-admin-key':key})).status,400);
 for (const status of ['PREPARING','OUT_FOR_DELIVERY','DELIVERED']) {
-  const updated = await call(`/orders/${order.id}/status`,'PATCH',{status},{'x-admin-key':key});
+  const updated = await call(`/orders/${order.id}/status`,'PATCH',{status,note:customer.phone+' '+customer.address},{'x-admin-key':key});
   assert.equal(updated.status,200);
+  assert.deepEqual(updated.data.data.customer, customer);
+  assert.equal(updated.data.data.timeline.at(-1).note, customer.phone+' '+customer.address);
   const refreshed = await call(`/orders/${order.orderNumber}`);
   assert.equal(refreshed.data.data.status,status);
+  assertPublic(refreshed.data.data);
   order = refreshed.data.data;
 }
 assert.equal(order.timeline.length,4);
-assert.equal((await call(`/orders/${order.id}`)).data.data.status,'DELIVERED');
+const byId = await call(`/orders/${order.id}`);
+assert.equal(byId.data.data.status,'DELIVERED');
+assert.equal(byId.cacheControl,'no-store');
+assertPublic(byId.data.data);
+const adminList = await call('/orders','GET',undefined,{'x-admin-key':key});
+assert.equal(adminList.status,200);
+assert.deepEqual(adminList.data.data.find(item=>item.id===order.id).customer,customer);
+console.log('PASS: private contact fields absent from public creation/ID/number lookups and retained for authorized administration');
 console.log('PASS: order retrieval, authorized status lifecycle, refreshed tracking data and history');
 const client = await fetch('http://localhost:5173/track/'+order.orderNumber);
 assert.equal(client.status,200); assert.match(await client.text(),/id="root"/);

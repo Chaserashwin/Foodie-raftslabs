@@ -4,9 +4,6 @@ import {
   CheckCircle,
   ArrowRight,
   ShoppingBag,
-  MapPin,
-  Phone,
-  User,
   Copy,
   Check,
 } from 'lucide-react';
@@ -22,6 +19,7 @@ export const OrderConfirmationPage: React.FC = () => {
     (location.state as { order?: Order })?.order || null
   );
   const [loading, setLoading] = useState<boolean>(!order);
+  const [loadError, setLoadError] = useState(false);
   const [copied, setCopied] = useState<boolean>(false);
 
   useEffect(() => {
@@ -29,7 +27,7 @@ export const OrderConfirmationPage: React.FC = () => {
       api
         .getOrderById(orderId)
         .then((data) => setOrder(data))
-        .catch((err) => console.error('Failed to load order:', err))
+        .catch(() => setLoadError(true))
         .finally(() => setLoading(false));
     }
   }, [order, orderId]);
@@ -51,7 +49,7 @@ export const OrderConfirmationPage: React.FC = () => {
       <div className="max-w-md mx-auto px-4 py-20 text-center">
         <h2 className="text-xl font-bold text-slate-900">Order Not Found</h2>
         <p className="text-xs text-slate-500 mt-2 mb-6">
-          We could not find order details for {orderId}.
+          {loadError ? 'Unable to retrieve this order. Please try again from tracking.' : 'We could not find this order.'}
         </p>
         <Link
           to="/"
@@ -76,16 +74,16 @@ export const OrderConfirmationPage: React.FC = () => {
         </span>
 
         <h1 className="text-2xl sm:text-3xl font-black text-slate-900 mt-3">
-          Thank you, {order.customer.name.split(' ')[0]}!
+          Thank you for your order!
         </h1>
         <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-md mx-auto leading-relaxed">
           Your order has been transmitted to our kitchen. You can track live preparation and delivery below.
         </p>
 
         {/* Order ID pill */}
-        <div className="mt-6 inline-flex items-center gap-3 bg-slate-50 border border-slate-200 px-4 py-2.5 rounded-2xl">
+        <div className="mt-6 inline-flex max-w-full flex-wrap items-center justify-center gap-3 bg-slate-50 border border-slate-200 px-4 py-2.5 rounded-2xl">
           <span className="text-xs text-slate-500 font-semibold">Order ID:</span>
-          <span className="font-mono font-black text-slate-900 text-sm tracking-wide">
+          <span className="font-mono font-black text-slate-900 text-sm tracking-wide break-all">
             {order.orderNumber}
           </span>
           <button
@@ -158,26 +156,7 @@ export const OrderConfirmationPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Delivery Details */}
-        <div className="pt-6 border-t border-slate-100">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">
-            Delivery Address
-          </h3>
-          <div className="bg-slate-50 p-4 rounded-2xl space-y-2 text-xs text-slate-700">
-            <div className="flex items-center gap-2 font-bold text-slate-900">
-              <User className="w-4 h-4 text-slate-500" />
-              <span>{order.customer.name}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Phone className="w-4 h-4 text-slate-500" />
-              <span>{order.customer.phone}</span>
-            </div>
-            <div className="flex items-start gap-2">
-              <MapPin className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
-              <span>{order.customer.address}</span>
-            </div>
-          </div>
-        </div>
+
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { OrderService } from '../services/order.service.js';
+import { toPublicOrder } from '../serializers/order.serializer.js';
 import {
   createOrderSchema,
   updateOrderStatusSchema,
@@ -17,7 +18,7 @@ export class OrderController {
       res.status(201).json({
         success: true,
         message: 'Order placed successfully',
-        data: order,
+        data: toPublicOrder(order),
       });
     } catch (err) {
       next(err);
@@ -31,7 +32,7 @@ export class OrderController {
 
       res.status(200).json({
         success: true,
-        data: order,
+        data: toPublicOrder(order),
       });
     } catch (err) {
       next(err);
