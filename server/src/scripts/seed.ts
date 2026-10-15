@@ -241,7 +241,7 @@ export async function seedDatabase(options: {
 }
 
 // Execute directly if run as a CLI script
-if (process.argv[1] && process.argv[1].replace(/\\/g, '/').endsWith('scripts/seed.ts')) {
+if (process.argv[1] && /scripts\/seed\.[tj]s$/.test(process.argv[1].replace(/\\/g, '/'))) {
   seedDatabase({ closeConnectionAfter: true, verbose: true })
     .then((res) => {
       if (!res.success) {

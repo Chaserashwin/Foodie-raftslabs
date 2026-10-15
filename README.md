@@ -60,6 +60,29 @@ npm run preview --prefix client
 
 The production API starts from `server/dist/server.js` after building. Production requires persistent MongoDB and explicit origins/admin key. The backend serves API endpoints only; host the client assets separately. `vite preview` is for local build verification.
 
+## MongoDB Atlas Seeding and Verification
+
+The repository includes a dedicated, idempotent, non-destructive database seeder at `server/src/scripts/seed.ts`.
+
+### Seeding Commands
+```powershell
+# From repository root:
+npm run seed
+# or
+npm run seed:atlas
+
+# Or from the server directory:
+npm run seed --prefix server
+```
+
+### Seeding Policy & Safety Guarantees
+1. **Authoritative Catalog**: Seeds all 16 canonical menu items (4 pizzas, 4 burgers, 4 sides, 4 beverages) from `server/src/data/seedMenu.ts`.
+2. **Schema & Field Validation**: Validates every record (name, category, price >= 0, valid HTTPS Unsplash image URL) prior to writing.
+3. **Strict Idempotency**: Matches records by stable unique compound key (`{ name, category }`). Existing items are updated only if authoritative specifications changed; identical items are skipped. Executing the script multiple times never creates duplicate records.
+4. **Order Collection Protection**: Never drops databases, wipes collections, or touches the `orders` collection. Document `_id` values for existing items are preserved to ensure historical order references remain valid.
+5. **Credential Masking**: Connection URIs are logged with credentials masked (`mongodb+srv://****:****@...`) in all output.
+6. **Detailed Audit Report**: Outputs a summary showing inserted, updated, skipped, failed, and final record counts.
+
 ## API
 
 Responses use `{ success, data }` on successful data requests and `{ success: false, error, details? }` on errors. Readiness has its own status/database fields.
