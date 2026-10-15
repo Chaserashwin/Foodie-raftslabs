@@ -9,7 +9,9 @@
     "start": "node dist/server.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "seed": "tsx src/scripts/seed.ts",
+    "seed:atlas": "tsx src/scripts/seed.ts"
   },
   "dependencies": {
     "cors": "^2.8.5",
