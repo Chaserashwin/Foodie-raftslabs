@@ -4,9 +4,8 @@ services:
     name: foodie-backend-api
     runtime: node
     plan: free
-    rootDir: server
-    buildCommand: npm ci && npm run build
-    startCommand: npm run start
+    buildCommand: npm ci && npm ci --prefix server && npm ci --prefix client && npm run build
+    startCommand: npm run start --prefix server
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
@@ -21,6 +20,8 @@ services:
         generateValue: true
       - key: DELIVERY_FEE
         value: 40
+      - key: USE_MEMORY_DB
+        value: false
 
   # Frontend Static Site
   - type: web

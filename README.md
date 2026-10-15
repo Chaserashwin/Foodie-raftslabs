@@ -123,7 +123,18 @@ There are no product write/delete or order delete endpoints. Menu data is seeded
 No deployment was performed during the audit. After authorization and access to the hosting/database accounts:
 
 1. Create a dedicated persistent MongoDB database/user. Allow only the necessary hosting egress addresses where practical; keep the URI private.
-2. Deploy the backend to Render with root directory `server`, build `npm ci && npm run build`, start `npm run start`, health check `/api/health`. Set `NODE_ENV=production`, `MONGODB_URI`, a unique `ADMIN_API_KEY`, exact frontend `CORS_ORIGIN`, and `DELIVERY_FEE=40`; keep `USE_MEMORY_DB=false`. The blueprint provides the backend and an optional Render static frontend.
+2. Deploy the backend to Render (`Foodie-backend` Web Service) with:
+   - **Root Directory**: *(leave blank)*
+   - **Build Command**: `npm ci && npm ci --prefix server && npm ci --prefix client && npm run build`
+   - **Start Command**: `npm run start --prefix server`
+   - **Health Check Path**: `/api/health`
+   - **Environment Variables**:
+     - `NODE_ENV`: `production`
+     - `MONGODB_URI`: `<Your MongoDB Atlas Connection URI>`
+     - `ADMIN_API_KEY`: `<Your unique 32+ character admin secret>`
+     - `CORS_ORIGIN`: `<Your frontend HTTPS URL>` (exact origin, no trailing slash or wildcard)
+     - `DELIVERY_FEE`: `40`
+     - `USE_MEMORY_DB`: `false`
 3. Deploy the frontend to Vercel with root `client`, build `npm run build`, output `dist`, and `VITE_API_URL=<actual backend HTTPS URL>/api`. Set this before building and redeploy if it changes. Alternatively use the blueprint's Render static frontend with the same public API variable.
 4. Set backend CORS to the actual frontend origin, including only deliberately approved preview origins. Confirm the API works from that browser origin. Vercel SPA deep-link rewrites are in `client/vercel.json`; Render static rewrites are in `render.yaml`.
 5. Verify the actual health/menu URLs and complete the browser journey at desktop and mobile widths. Refresh the cart, confirmation, and tracking pages. Restart the deployed backend and verify orders remain.
