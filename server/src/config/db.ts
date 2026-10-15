@@ -50,9 +50,10 @@ export async function connectDatabase(): Promise<void> {
   // Attempt real MongoDB connection
   try {
     mongoose.set('strictQuery', false);
-    await mongoose.connect(env.MONGODB_URI, {
+    const connectOptions: mongoose.ConnectOptions = {
       serverSelectionTimeoutMS: 8000,
-    });
+    };
+    await mongoose.connect(env.MONGODB_URI, connectOptions);
     console.log('Connected to MongoDB');
   } catch {
     console.warn('Could not connect to configured MongoDB');
@@ -98,9 +99,13 @@ export async function seedDatabaseIfEmpty(): Promise<void> {
   try {
     const count = await MenuItem.countDocuments();
     if (count === 0) {
-      console.log('Menu collection is empty. Seeding initial menu items...');
-      await MenuItem.insertMany(SEED_MENU_ITEMS);
-      console.log(`Successfully seeded ${SEED_MENU_ITEMS.length} menu items.`);
+      if (env.NODE_ENV === 'production') {
+        console.warn('Production menu collection is empty. Run "npm run seed" to seed authoritative data.');
+      } else {
+        console.log('Menu collection is empty. Seeding initial menu items...');
+        await MenuItem.insertMany(SEED_MENU_ITEMS);
+        console.log(`Successfully seeded ${SEED_MENU_ITEMS.length} menu items.`);
+      }
     }
     // Ensure unique order/idempotency indexes exist before accepting requests.
     await Order.init();

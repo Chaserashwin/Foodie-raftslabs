@@ -114,7 +114,7 @@ export class OrderService {
     } catch (err: any) {
       if (err.code === 11000 && idempotencyKey) {
         const existing = await Order.findOne({ idempotencyKey });
-        if (existing?.requestHash === requestHash) return existing;
+        if (existing && existing.requestHash === requestHash) return existing;
         throw new AppError('Idempotency key conflict', 409);
       }
       throw err;

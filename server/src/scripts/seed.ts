@@ -54,16 +54,19 @@ export function maskMongoUri(uri: string): string {
   }
 }
 
+export interface SeedOptions {
+  connectionUri?: string;
+  closeConnectionAfter?: boolean;
+  verbose?: boolean;
+  connectOptions?: mongoose.ConnectOptions;
+}
+
 /**
  * Idempotent, non-destructive database seeder.
  * Upserts authoritative menu records by stable unique key ({ name, category }).
  * Preserves all existing orders and unrelated collections.
  */
-export async function seedDatabase(options: {
-  connectionUri?: string;
-  closeConnectionAfter?: boolean;
-  verbose?: boolean;
-} = {}): Promise<SeedResult> {
+export async function seedDatabase(options: SeedOptions = {}): Promise<SeedResult> {
   const uri = options.connectionUri || env.MONGODB_URI;
   const verbose = options.verbose ?? true;
   let shouldCloseConnection = options.closeConnectionAfter ?? false;
@@ -74,9 +77,11 @@ export async function seedDatabase(options: {
     if (verbose) {
       console.log(`Connecting to MongoDB at ${maskMongoUri(uri)}...`);
     }
-    await mongoose.connect(uri, {
+    const connectOpts: mongoose.ConnectOptions = {
       serverSelectionTimeoutMS: 8000,
-    });
+      ...options.connectOptions,
+    };
+    await mongoose.connect(uri, connectOpts);
   }
 
   const db = mongoose.connection.db;

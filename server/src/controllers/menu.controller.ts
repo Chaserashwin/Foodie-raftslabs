@@ -7,7 +7,7 @@ export class MenuController {
     try {
       const query = getMenuQuerySchema.parse(req.query);
       const items = await MenuService.getMenuItems({
-        category: query.category as any,
+        category: query.category,
         search: query.search,
       });
 
